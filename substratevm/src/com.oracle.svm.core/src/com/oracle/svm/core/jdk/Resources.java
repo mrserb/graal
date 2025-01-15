@@ -24,6 +24,8 @@
  */
 package com.oracle.svm.core.jdk;
 
+import static com.oracle.svm.core.jdk.resources.NativeImageResourceFileSystemProvider.RESOURCE_PROTOCOL;
+
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -863,7 +865,7 @@ public final class Resources {
                 host = moduleName(module);
             }
             String authority = host != null ? "//" + (userInfo != null ? userInfo + '@' : "") + host : "";
-            return new URL(JavaNetSubstitutions.RESOURCE_PROTOCOL + ':' + authority + '/' + resourceName + refPart);
+            return new URL(RESOURCE_PROTOCOL + ':' + authority + '/' + resourceName + refPart);
         } catch (MalformedURLException ex) {
             throw new IllegalStateException(ex);
         }

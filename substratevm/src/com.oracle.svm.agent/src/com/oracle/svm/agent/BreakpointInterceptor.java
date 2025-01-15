@@ -1924,6 +1924,7 @@ final class BreakpointInterceptor {
                                     BreakpointInterceptor::getNestMembers),
                     optionalBrk("java/lang/Class", "getSigners", "()[Ljava/lang/Object;",
                                     BreakpointInterceptor::getSigners),
+                    brk("java/net/URL$DefaultFactory", "createURLStreamHandler", "(Ljava/lang/String;)Ljava/net/URLStreamHandler;", BreakpointInterceptor::createURLStreamHandler),
 
                     /* FFM API was introduced in Java 22 */
                     brk("jdk/internal/foreign/abi/AbstractLinker", "downcallHandle0",
@@ -1933,6 +1934,18 @@ final class BreakpointInterceptor {
                                     "(Ljava/lang/invoke/MethodHandle;Ljava/lang/foreign/FunctionDescriptor;Ljava/lang/foreign/Arena;[Ljava/lang/foreign/Linker$Option;)Ljava/lang/foreign/MemorySegment;",
                                     BreakpointInterceptor::upcallStub)
     };
+
+    private static boolean createURLStreamHandler(JNIEnvironment jni, JNIObjectHandle thread, Breakpoint bp, InterceptedState state) {
+        JNIObjectHandle callerClass = state.getDirectCallerClass();
+        JNIObjectHandle protocol = getObjectArgument(thread, 1);
+        String protocolName = fromJniString(jni, protocol);
+        /* These protocols are fetched reflectively in Native Image and directly in the JDK */
+        if ("jar".equals(protocolName) || "jrt".equals(protocolName)) {
+            String protocolClass = "sun.net.www.protocol." + protocolName + ".Handler";
+            traceReflectBreakpoint(jni, bp.clazz, nullHandle(), callerClass, bp.specification.methodName, null, state.getFullStackTraceOrNull(), protocolClass);
+        }
+        return true;
+    }
 
     private static boolean allocateInstance(JNIEnvironment jni, JNIObjectHandle thread, @SuppressWarnings("unused") Breakpoint bp, InterceptedState state) {
         JNIObjectHandle callerClass = state.getDirectCallerClass();

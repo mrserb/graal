@@ -671,14 +671,14 @@ public class SubstrateOptions {
     @Option(help = "Trace all native tool invocations as part of image building", type = User)//
     public static final HostedOptionKey<Boolean> TraceNativeToolUsage = new HostedOptionKey<>(false);
 
-    @APIOption(name = "enable-http", fixedValue = "http", customHelp = "enable http support in the generated image")//
-    @APIOption(name = "enable-https", fixedValue = "https", customHelp = "enable https support in the generated image")//
-    @APIOption(name = "enable-url-protocols")//
-    @Option(help = "List of comma separated URL protocols to enable. Use 'all' to enable all known JDK URL protocols. Use 'runtime' with runtime class loading to keep JDK URL protocol handling at runtime.")//
+    @APIOption(name = "enable-http", fixedValue = "http", customHelp = "enable http support in the generated image", deprecated = "Use reachability metadata instead.")//
+    @APIOption(name = "enable-https", fixedValue = "https", customHelp = "enable https support in the generated image", deprecated = "Use reachability metadata instead.")//
+    @APIOption(name = "enable-url-protocols", deprecated = "Use reachability metadata instead.")//
+    @Option(help = "List of comma separated URL protocols to enable.")//
     public static final HostedOptionKey<AccumulatingLocatableMultiOptionValue.Strings> EnableURLProtocols = new HostedOptionKey<>(
                     AccumulatingLocatableMultiOptionValue.Strings.buildWithCommaDelimiter());
 
-    @Option(help = "List of comma separated URL protocols that must never be included.")//
+    @Option(help = "List of comma separated URL protocols that must never be included.", deprecated = true, deprecationMessage = "Omit protocol from reachability metadata.")//
     public static final HostedOptionKey<AccumulatingLocatableMultiOptionValue.Strings> DisableURLProtocols = new HostedOptionKey<>(
                     AccumulatingLocatableMultiOptionValue.Strings.buildWithCommaDelimiter());
 

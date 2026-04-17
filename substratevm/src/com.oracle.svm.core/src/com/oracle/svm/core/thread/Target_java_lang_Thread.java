@@ -74,7 +74,11 @@ public final class Target_java_lang_Thread {
 
     @Inject //
     @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset) //
-    long parentThreadId;
+    public long jfrParentThreadId;
+
+    @Inject //
+    @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset) //
+    public String jfrParentVThreadName;
 
     @Inject //
     @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset) //
@@ -273,12 +277,15 @@ public final class Target_java_lang_Thread {
     @Substitute
     @Platforms(InternalPlatform.NATIVE_ONLY.class)
     private void start0() {
-        parentThreadId = JavaThreads.getThreadId(Thread.currentThread());
+        Thread currentThread = Thread.currentThread();
+        jfrParentThreadId = JavaThreads.getThreadId(currentThread);
+        jfrParentVThreadName = JavaThreads.isVirtual(currentThread) ? currentThread.getName() : null;
         long stackSize = PlatformThreads.getRequestedStackSize(JavaThreads.fromTarget(this), true);
         try {
             PlatformThreads.singleton().startThread(JavaThreads.fromTarget(this), stackSize);
         } catch (Throwable t) {
-            parentThreadId = 0; // should not be accessed if thread could not start, but reset still
+            jfrParentThreadId = 0L;
+            jfrParentVThreadName = null;
             throw t;
         }
         /*

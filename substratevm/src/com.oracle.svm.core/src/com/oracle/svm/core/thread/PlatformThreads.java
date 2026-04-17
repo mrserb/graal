@@ -848,6 +848,7 @@ public abstract class PlatformThreads {
         int numThreads = unattachedStartedThreads.decrementAndGet();
         assert numThreads >= 0;
 
+        ObjectHandles.getGlobal().destroy(startData.getThreadHandle());
         freeStartData(startData);
     }
 

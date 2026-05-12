@@ -701,6 +701,7 @@ suite = {
             "requires": [
                 "jdk.unsupported",
                 "java.compiler",
+                "java.desktop",
             ],
             "requiresConcealed": {
                 "jdk.internal.vm.ci": [
@@ -722,6 +723,9 @@ suite = {
             "sourceDirs": ["src"],
             "dependencies": [
                 "compiler:GRAAL",
+            ],
+            "requires": [
+                "java.desktop",
             ],
             "checkstyle": "com.oracle.svm.test",
             "workingSets": "SVM,Test",

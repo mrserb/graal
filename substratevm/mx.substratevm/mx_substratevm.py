@@ -1072,7 +1072,7 @@ def jvm_unittest(args):
     return mx_unittest.unittest(['--suite', 'substratevm'] + args)
 
 
-@mx.command(suite_name=suite.name, command_name='standalone-pointsto-unittest', usage_msg='[host|espresso]')
+@mx.command(suite_name=suite.name, command_name='standalone-pointsto-unittest', usage_msg='[host|espresso] [test-spec]')
 def standalone_pointsto_unittest(args):
     def espresso_vmargs():
         if not mx.suite('espresso-compiler-stub', fatalIfMissing=False):
@@ -1094,13 +1094,28 @@ def standalone_pointsto_unittest(args):
             '-Dcom.oracle.graal.pointsto.standalone.vmaccess.java.home=' + graaljdk_home,
         ]
 
-    if len(args) > 1 or (args and args[0] not in ('host', 'espresso')):
-        mx.abort('Usage: mx standalone-pointsto-unittest [host|espresso]')
+    common_pool_factory_property = '-Djava.util.concurrent.ForkJoinPool.common.threadFactory=com.oracle.graal.pointsto.standalone.StandaloneCommonPoolWorkerThreadFactory'
 
-    requested_vmaccess = args[0] if args else 'espresso'
+    if len(args) > 2:
+        mx.abort('Usage: mx standalone-pointsto-unittest [host|espresso] [test-spec]')
+
+    requested_vmaccess = 'espresso'
+    requested_test_spec = 'com.oracle.graal.pointsto.standalone.test'
+
+    if args:
+        if args[0] in ('host', 'espresso'):
+            requested_vmaccess = args[0]
+            if len(args) == 2:
+                requested_test_spec = args[1]
+        elif len(args) == 1:
+            requested_test_spec = args[0]
+        else:
+            mx.abort('Usage: mx standalone-pointsto-unittest [host|espresso] [test-spec]')
+
     unittest_args = [
+        common_pool_factory_property,
         '-Dcom.oracle.graal.pointsto.standalone.vmaccess.name=' + requested_vmaccess,
-        'com.oracle.graal.pointsto.standalone.test',
+        requested_test_spec,
     ]
     if requested_vmaccess == 'espresso':
         unittest_args = espresso_vmargs() + unittest_args

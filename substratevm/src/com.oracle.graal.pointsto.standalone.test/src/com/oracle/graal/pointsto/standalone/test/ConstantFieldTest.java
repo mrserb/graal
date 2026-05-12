@@ -26,8 +26,12 @@
 
 package com.oracle.graal.pointsto.standalone.test;
 
+import static org.junit.Assert.assertTrue;
+
 import org.junit.Test;
 
+import com.oracle.graal.pointsto.meta.AnalysisField;
+import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.standalone.test.classes.ConstantFieldCase;
 
 /**
@@ -45,15 +49,17 @@ public class ConstantFieldTest extends StandaloneAnalysisTest {
      * Verifies that analyzing {@link ConstantFieldCase} reaches the class initializer, the constant
      * field, and the method triggered through the constant value flow.
      *
-     * The test exists to guard two behaviors at once: standalone analysis should model
-     * {@link ConstantFieldCase#constantField} through analysis instead of folding it away, and it
-     * should keep the class initializer as analysis work rather than assuming eager initialization.
+     * The unified standalone model should eagerly initialize the fixture, fold the constant field,
+     * and still preserve the downstream reachability triggered by the folded value.
      */
     @Test
     public void testConstantField() {
         runAnalysis(ConstantFieldCase.class);
         assertReachable(findMethod(ConstantFieldCase.ConstantType.class, "foo"));
-        assertReachable(findClassInitializer(ConstantFieldCase.class));
-        assertReachable(findField(ConstantFieldCase.class, "constantField"));
+        AnalysisField constantField = findField(ConstantFieldCase.class, "constantField");
+        AnalysisType constantFieldCase = findClass(ConstantFieldCase.class);
+        assertNotReachable(findClassInitializer(ConstantFieldCase.class));
+        assertTrue("The declaring class should be initialized under unified standalone semantics.", constantFieldCase.isInitialized());
+        assertTrue("The constant field should be folded under unified standalone semantics.", constantField.isFolded());
     }
 }

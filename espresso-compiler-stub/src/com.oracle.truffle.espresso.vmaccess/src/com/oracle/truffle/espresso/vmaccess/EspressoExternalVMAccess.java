@@ -884,7 +884,9 @@ final class EspressoExternalVMAccess implements VMAccess {
         JVMCIError.guarantee(name.charAt(0) == 'L' && name.charAt(name.length() - 1) == ';', "Invalid type: " + name);
         Value meta = invokeJVMCIHelper("lookupInstanceType", name, accessingClass.getMetaObject(), resolve);
         if (meta.isNull()) {
-            JVMCIError.guarantee(!resolve, "Expected a resolved type");
+            if (resolve) {
+                throw new LinkageError("Could not resolve type " + name);
+            }
             return UnresolvedJavaType.create(name);
         }
         return new EspressoExternalResolvedInstanceType(this, meta);

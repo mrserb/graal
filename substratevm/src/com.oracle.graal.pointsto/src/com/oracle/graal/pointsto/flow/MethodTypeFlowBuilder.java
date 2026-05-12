@@ -248,7 +248,7 @@ public class MethodTypeFlowBuilder {
             }
 
             // Do it again after canonicalization changed type checks and field accesses.
-            registerUsedElements(bb, graph, bb.usePredicates());
+            registerUsedElements(graph, bb.usePredicates());
 
             return true;
         } catch (Throwable ex) {
@@ -282,7 +282,28 @@ public class MethodTypeFlowBuilder {
         }
     }
 
+    /**
+     * Registers the graph elements that analysis needs before the type-flow walk starts.
+     *
+     * This static overload is used by external callers that only have a parsed graph and want the
+     * default precise object-constant behavior from the core analysis.
+     */
     public static void registerUsedElements(AbstractAnalysisEngine bb, StructuredGraph graph, boolean usePredicates) {
+        registerUsedElements(bb, graph, usePredicates, (constantValue, stampedType, position) -> registerPreciseObjectConstantRoot(bb, constantValue, stampedType, position));
+    }
+
+    /**
+     * Registers the graph elements that analysis needs before the type-flow walk starts.
+     *
+     * This instance overload exists so subclasses can reuse the shared graph walk while customizing
+     * how object constants are registered, for example to approximate selected constants without
+     * materializing them precisely in the image heap.
+     */
+    protected void registerUsedElements(StructuredGraph parsedGraph, boolean usePredicates) {
+        registerUsedElements(bb, parsedGraph, usePredicates, this::registerObjectConstantRoot);
+    }
+
+    private static void registerUsedElements(AbstractAnalysisEngine bb, StructuredGraph graph, boolean usePredicates, ObjectConstantRootRegistrar rootRegistrar) {
         var method = (AnalysisMethod) graph.method();
         HostedProviders providers = bb.getProviders(method);
         for (Node n : graph.getNodes()) {
@@ -363,8 +384,8 @@ public class MethodTypeFlowBuilder {
                     assert StampTool.isExactType(cn) : cn;
                     if (!ignoreConstant(bb, cn)) {
                         AnalysisType type = (AnalysisType) StampTool.typeOrNull(cn, bb.getMetaAccess());
-                        type.registerAsInstantiated(new EmbeddedRootScan(AbstractAnalysisEngine.sourcePosition(cn), root));
-                        registerEmbeddedRoot(bb, cn);
+                        BytecodePosition position = AbstractAnalysisEngine.sourcePosition(cn);
+                        rootRegistrar.register(root, type, position);
                     }
                 }
 
@@ -444,6 +465,18 @@ public class MethodTypeFlowBuilder {
     }
 
     /**
+     * Callback used by the shared graph walk to register object constants that appear as embedded
+     * roots in the parsed graph.
+     *
+     * The indirection lets the shared registration pass serve both the default precise behavior and
+     * standalone-specific approximations without forking the surrounding traversal logic.
+     */
+    @FunctionalInterface
+    private interface ObjectConstantRootRegistrar {
+        void register(JavaConstant constantValue, AnalysisType stampedType, BytecodePosition position);
+    }
+
+    /**
      * Unsafe access nodes whose offset is a {@link FieldOffsetProvider} are modeled directly as
      * field access type flows and therefore do not need unsafe registration.
      *
@@ -499,8 +532,28 @@ public class MethodTypeFlowBuilder {
         return true;
     }
 
-    private static void registerEmbeddedRoot(AbstractAnalysisEngine bb, ConstantNode cn) {
-        bb.getUniverse().registerEmbeddedRoot(cn.asJavaConstant(), AbstractAnalysisEngine.sourcePosition(cn));
+    /**
+     * Registers a reachable object constant so later heap scans and verifier passes see the same
+     * root set that the type-flow builder observed while walking the graph.
+     *
+     * The default implementation preserves the precise constant semantics by instantiating the
+     * stamped constant type and registering the raw embedded root. Subclasses may override this
+     * hook to approximate selected constants differently while keeping the surrounding graph walk
+     * shared.
+     */
+    protected void registerObjectConstantRoot(JavaConstant constantValue, AnalysisType stampedType, BytecodePosition position) {
+        registerPreciseObjectConstantRoot(bb, constantValue, stampedType, position);
+    }
+
+    /**
+     * Registers an object constant with the default precise semantics used by core analysis.
+     *
+     * This helper keeps the original behavior in one place so both the static graph-registration
+     * path and the overridable instance hook can share the exact same rooted-constant semantics.
+     */
+    private static void registerPreciseObjectConstantRoot(AbstractAnalysisEngine bb, JavaConstant constantValue, AnalysisType stampedType, BytecodePosition position) {
+        stampedType.registerAsInstantiated(new EmbeddedRootScan(position, constantValue));
+        bb.getUniverse().registerEmbeddedRoot(constantValue, position);
     }
 
     private static void registerForeignCall(AbstractAnalysisEngine bb, ForeignCallsProvider foreignCallsProvider, ForeignCallDescriptor foreignCallDescriptor, ResolvedJavaMethod from) {
@@ -668,8 +721,7 @@ public class MethodTypeFlowBuilder {
                                 assert type.isInstantiated() : type;
                                 JavaConstant constantValue = node.asJavaConstant();
                                 BytecodePosition position = AbstractAnalysisEngine.sourcePosition(node);
-                                JavaConstant heapConstant = bb.getUniverse().getHeapScanner().toImageHeapObject(constantValue, new EmbeddedRootScan(position, constantValue));
-                                ConstantTypeFlow constantSource = new ConstantTypeFlow(position, type, TypeState.forConstant(this.bb, heapConstant, type));
+                                ConstantTypeFlow constantSource = createObjectConstantSource(type, constantValue, position);
                                 flowsGraph.addMiscEntryFlow(constantSource);
                                 return constantSource;
                             });
@@ -699,6 +751,29 @@ public class MethodTypeFlowBuilder {
             result = ((LimitedValueProxy) result).getOriginalNode();
         }
         return result;
+    }
+
+    /**
+     * Creates the source flow for an object constant encountered in the graph.
+     *
+     * The default implementation preserves the precise constant semantics by materializing a
+     * reachable image-heap constant and wrapping it in a constant type state. Subclasses may
+     * override this hook to approximate selected constants differently while keeping the rest of
+     * the graph-building logic shared.
+     */
+    protected ConstantTypeFlow createObjectConstantSource(AnalysisType stampedType, JavaConstant constantValue, BytecodePosition position) {
+        assert stampedType.isInstantiated() : stampedType;
+        JavaConstant heapConstant = bb.getUniverse().getHeapScanner().toImageHeapObject(constantValue, new EmbeddedRootScan(position, constantValue));
+        return new ConstantTypeFlow(position, stampedType, TypeState.forConstant(bb, heapConstant, stampedType));
+    }
+
+    /**
+     * Creates a type-only object-constant source that preserves non-null exact-type information
+     * without materializing a concrete image-heap constant.
+     */
+    protected ConstantTypeFlow createTypeOnlyObjectConstantSource(AnalysisType exposedType, BytecodePosition position) {
+        exposedType.registerAsReachable(position);
+        return new ConstantTypeFlow(position, null, TypeState.forType(bb, exposedType, false));
     }
 
     protected void apply(boolean forceReparse, Object reason) {
@@ -754,7 +829,9 @@ public class MethodTypeFlowBuilder {
             insertPlaceholderParamAndReturnFlows();
         }
 
-        method.setAnalyzedGraph(GraphEncoder.encodeSingleGraph(graph, AnalysisParsedGraph.HOST_ARCHITECTURE, flowsGraph.getNodeFlows().getKeys()));
+        if (bb.getHostVM().shouldStoreAnalyzedGraph(bb, method)) {
+            method.setAnalyzedGraph(GraphEncoder.encodeSingleGraph(graph, AnalysisParsedGraph.HOST_ARCHITECTURE, flowsGraph.getNodeFlows().getKeys()));
+        }
     }
 
     /**
@@ -1090,10 +1167,10 @@ public class MethodTypeFlowBuilder {
                     assert StampTool.isExactType(node) : node;
                     AnalysisType type = (AnalysisType) StampTool.typeOrNull(node, bb.getMetaAccess());
                     result = TypeFlowBuilder.create(bb, method, getPredicate(), node, ConstantTypeFlow.class, () -> {
+                        assert type.isInstantiated() : type;
                         JavaConstant constantValue = node.asJavaConstant();
                         BytecodePosition position = AbstractAnalysisEngine.sourcePosition(node);
-                        JavaConstant heapConstant = bb.getUniverse().getHeapScanner().toImageHeapObject(constantValue, new EmbeddedRootScan(position, constantValue));
-                        ConstantTypeFlow constantSource = new ConstantTypeFlow(position, type, TypeState.forConstant(bb, heapConstant, type));
+                        ConstantTypeFlow constantSource = createObjectConstantSource(type, constantValue, position);
                         flowsGraph.addMiscEntryFlow(constantSource);
                         return constantSource;
                     });

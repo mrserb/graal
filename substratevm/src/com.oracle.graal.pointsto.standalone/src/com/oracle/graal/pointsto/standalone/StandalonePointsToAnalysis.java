@@ -33,10 +33,14 @@ import com.oracle.graal.pointsto.ClassInclusionPolicy;
 import com.oracle.graal.pointsto.PointsToAnalysis;
 import com.oracle.graal.pointsto.api.HostVM;
 import com.oracle.graal.pointsto.constraints.UnsupportedFeatures;
+import com.oracle.graal.pointsto.flow.MethodFlowsGraph;
+import com.oracle.graal.pointsto.flow.MethodTypeFlowBuilder;
 import com.oracle.graal.pointsto.meta.AnalysisMetaAccess;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.meta.AnalysisUniverse;
+import com.oracle.graal.pointsto.meta.PointsToAnalysisMethod;
+import com.oracle.graal.pointsto.util.AnalysisError;
 import com.oracle.graal.pointsto.util.TimerCollection;
 
 import jdk.graal.compiler.api.replacements.SnippetReflectionProvider;
@@ -47,17 +51,22 @@ import jdk.vm.ci.meta.ConstantReflectionProvider;
 
 public class StandalonePointsToAnalysis extends PointsToAnalysis {
     private final Set<AnalysisMethod> addedClinits = ConcurrentHashMap.newKeySet();
+    private final StandaloneHost standaloneHost;
 
     public StandalonePointsToAnalysis(OptionValues options, AnalysisUniverse universe, HostVM hostVM, AnalysisMetaAccess metaAccess, SnippetReflectionProvider snippetReflectionProvider,
-                    ConstantReflectionProvider constantReflectionProvider, WordTypes wordTypes, DebugContext debugContext, TimerCollection timerCollection, ClassInclusionPolicy classInclusionPolicy) {
+                    ConstantReflectionProvider constantReflectionProvider, WordTypes wordTypes, DebugContext debugContext, TimerCollection timerCollection,
+                    ClassInclusionPolicy classInclusionPolicy) {
         super(options, universe, hostVM, metaAccess, snippetReflectionProvider, constantReflectionProvider, wordTypes, new UnsupportedFeatures(), debugContext, timerCollection, classInclusionPolicy);
+        this.standaloneHost = (StandaloneHost) hostVM;
     }
 
     @Override
     public void cleanupAfterAnalysis() {
         super.cleanupAfterAnalysis();
-        // No need to keep method graphs for standalone analysis.
-        universe.getMethods().forEach(AnalysisMethod::clearAnalyzedGraph);
+        /*
+         * Standalone does not retain analysis metadata after reporting the result, so the universe
+         * can be dropped eagerly once analysis completes.
+         */
         universe.getMethods().clear();
         universe.getFields().clear();
         addedClinits.clear();
@@ -69,11 +78,34 @@ public class StandalonePointsToAnalysis extends PointsToAnalysis {
     }
 
     @Override
+    public MethodTypeFlowBuilder createMethodTypeFlowBuilder(PointsToAnalysis bb, PointsToAnalysisMethod method, MethodFlowsGraph flowsGraph, MethodFlowsGraph.GraphKind graphKind) {
+        return new StandaloneMethodTypeFlowBuilder(bb, method, flowsGraph, graphKind);
+    }
+
+    @Override
     public void onTypeReachable(AnalysisType type) {
         AnalysisMethod clinitMethod = type.getClassInitializer();
-        if (clinitMethod != null && !addedClinits.contains(clinitMethod)) {
-            addRootMethod(clinitMethod, true, "Class initializer added onTypeReachable, in " + StandalonePointsToAnalysis.class);
-            addedClinits.add(clinitMethod);
+        if (!shouldAddClassInitializerRoot(type, clinitMethod)) {
+            return;
         }
+        addRootMethod(clinitMethod, true, "Class initializer added onTypeReachable, in " + StandalonePointsToAnalysis.class);
+    }
+
+    /**
+     * Host-owned class-initialization handling runs before this hook, so rooting the class
+     * initializer only needs to inspect the already-decided outcome for the reachable type.
+     */
+    private boolean shouldAddClassInitializerRoot(AnalysisType type, AnalysisMethod clinitMethod) {
+        if (clinitMethod == null) {
+            return false;
+        }
+        StandaloneHost.ClassInitializationOutcome initializationOutcome = standaloneHost.getClassInitializationOutcome(type);
+        AnalysisError.guarantee(initializationOutcome != StandaloneHost.ClassInitializationOutcome.PENDING,
+                        "Build-time class-initialization outcome must be decided before rooting %s", type.toJavaName());
+        return switch (initializationOutcome) {
+            case INITIALIZED -> false;
+            case RUNTIME_ONLY, FAILED -> addedClinits.add(clinitMethod);
+            case PENDING -> throw AnalysisError.shouldNotReachHere("Pending build-time class-initialization outcome for " + type.toJavaName());
+        };
     }
 }

@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2023, 2023, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2023, 2023, Alibaba Group Holding Limited. All rights reserved.
+ * Copyright (c) 2026, 2026, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,22 +25,16 @@
 
 package com.oracle.graal.pointsto.standalone;
 
-import com.oracle.graal.pointsto.BigBang;
-import com.oracle.graal.pointsto.ObjectScanner;
-import com.oracle.graal.pointsto.ObjectScanningObserver;
-import com.oracle.graal.pointsto.util.CompletionExecutor;
+import com.oracle.graal.pointsto.meta.AnalysisType;
 
 /**
- * Standalone {@link ObjectScanner} used during heap verification.
- *
- * Standalone no longer hard-codes any class-initialization gating in the scanner itself. Field
- * availability is decided by the standalone hosted-values and heap-scanner layer, so verification
- * can reuse the normal {@link ObjectScanner} traversal rules while still skipping unavailable
- * static values.
+ * Decides whether a reachable analysis type may be initialized eagerly while standalone analysis is
+ * still running.
  */
-public class StandaloneObjectScanner extends ObjectScanner {
-
-    public StandaloneObjectScanner(BigBang bb, CompletionExecutor executor, ReusableSet scannedObjects, ObjectScanningObserver scanningObserver) {
-        super(bb, executor, scannedObjects, scanningObserver);
-    }
+@FunctionalInterface
+public interface StandaloneClassInitializationStrategy {
+    /**
+     * Returns whether the standalone host may initialize {@code type} eagerly at build time.
+     */
+    boolean shouldInitializeAtBuildTime(AnalysisType type);
 }

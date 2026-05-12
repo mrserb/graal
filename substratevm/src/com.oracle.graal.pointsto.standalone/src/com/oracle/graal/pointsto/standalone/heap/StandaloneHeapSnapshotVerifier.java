@@ -35,6 +35,14 @@ import com.oracle.graal.pointsto.infrastructure.UniverseMetaAccess;
 import com.oracle.graal.pointsto.standalone.StandaloneObjectScanner;
 import com.oracle.graal.pointsto.util.CompletionExecutor;
 
+/**
+ * Standalone heap verification no longer needs a dedicated unsupported-constant filter.
+ *
+ * Unsupported guest metadata constants are now intercepted either before they become object
+ * constant flows or, for the remaining late materialization paths, inside the heap scanner itself.
+ * By the time verification walks the standalone shadow heap, it can simply rescan whatever the heap
+ * scanner already admitted.
+ */
 public class StandaloneHeapSnapshotVerifier extends HeapSnapshotVerifier {
     public StandaloneHeapSnapshotVerifier(BigBang bb, ImageHeap imageHeap, ImageHeapScanner scanner) {
         super(bb, imageHeap, scanner);
@@ -42,8 +50,6 @@ public class StandaloneHeapSnapshotVerifier extends HeapSnapshotVerifier {
 
     @Override
     protected ObjectScanner installObjectScanner(UniverseMetaAccess metaAccess, CompletionExecutor executor, boolean skipReachableCheck) {
-        StandaloneImageHeapScanner standaloneImageHeapScanner = (StandaloneImageHeapScanner) this.scanner;
-        return new StandaloneObjectScanner(bb, executor, scannedObjects, new ScanningObserver(skipReachableCheck), standaloneImageHeapScanner.getShouldScanConstant(),
-                        standaloneImageHeapScanner.getShouldScanField());
+        return new StandaloneObjectScanner(bb, executor, scannedObjects, new ScanningObserver(skipReachableCheck));
     }
 }

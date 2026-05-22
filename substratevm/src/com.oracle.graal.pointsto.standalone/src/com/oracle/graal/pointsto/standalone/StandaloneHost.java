@@ -35,10 +35,14 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.oracle.graal.pointsto.BigBang;
+import com.oracle.graal.pointsto.PointsToAnalysis;
 import com.oracle.graal.pointsto.api.HostVM;
+import com.oracle.graal.pointsto.flow.MethodTypeFlowBuilder.ObjectConstantHandler;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.meta.HostedProviders;
+import com.oracle.graal.pointsto.standalone.meta.StandaloneConstantReflectionProvider;
+import com.oracle.graal.pointsto.standalone.meta.StandaloneObjectConstantHandler;
 import com.oracle.graal.pointsto.standalone.plugins.StandaloneGraphBuilderPhase;
 import com.oracle.graal.pointsto.util.AnalysisError;
 import com.oracle.graal.pointsto.util.AnalysisFuture;
@@ -148,31 +152,32 @@ public class StandaloneHost extends HostVM {
     }
 
     /**
-     * Returns whether end-of-analysis reporting of downgraded class-initialization failures is
-     * enabled.
+     * Returns whether end-of-analysis reporting of class-initialization failures that fall back to
+     * runtime handling is enabled.
      */
     public boolean shouldPrintClassInitializationFailures() {
         return printClassInitializationFailures;
     }
 
     /**
-     * Returns the total number of build-time class-initialization attempts that failed and were
-     * downgraded during the current analysis.
+     * Returns the total number of build-time class-initialization attempts that failed and fell
+     * back to runtime handling during the current analysis.
      */
     public int getClassInitializationFailureCount() {
         return classInitializationFailureCount.get();
     }
 
     /**
-     * Returns the number of distinct classes whose first downgraded initialization failure was
-     * recorded during the current analysis.
+     * Returns the number of distinct classes whose first fallback-triggering initialization
+     * failure was recorded during the current analysis.
      */
     public int getClassInitializationFailureTypeCount() {
         return firstClassInitializationFailureStackTraces.size();
     }
 
     /**
-     * Formats the first recorded downgraded class-initialization failure for each class.
+     * Formats the first recorded class-initialization failure for each class that fell back to
+     * runtime handling.
      */
     public String formatClassInitializationFailures() {
         StringBuilder sb = new StringBuilder();
@@ -189,8 +194,8 @@ public class StandaloneHost extends HostVM {
     }
 
     /**
-     * Records the first downgraded class-initialization failure for each class and keeps a total
-     * attempt count for the whole analysis.
+     * Records the first class-initialization failure for each class that falls back to runtime
+     * handling and keeps a total attempt count for the whole analysis.
      */
     public void recordClassInitializationFailure(AnalysisType type, Throwable failure) {
         classInitializationFailureCount.incrementAndGet();
@@ -211,7 +216,7 @@ public class StandaloneHost extends HostVM {
             return ClassInitializationOutcome.INITIALIZED;
         } catch (Throwable failure) {
             /*
-             * Standalone should degrade to runtime-style handling for guest classes whose eager
+             * Standalone should fall back to runtime handling for guest classes whose eager
              * initialization is not executable on the current analysis thread.
              */
             recordClassInitializationFailure(type, failure);
@@ -251,6 +256,11 @@ public class StandaloneHost extends HostVM {
     public void onTypeReachable(BigBang bb, AnalysisType type) {
         AnalysisError.guarantee(type.isReachable(), "Registering and initializing a type that was not yet marked as reachable: %s", type.toJavaName());
         maybeInitializeAtBuildTime(type);
+    }
+
+    @Override
+    public ObjectConstantHandler createMethodTypeFlowBuilderObjectConstantHandler(PointsToAnalysis bb) {
+        return new StandaloneObjectConstantHandler((StandaloneConstantReflectionProvider) bb.getConstantReflectionProvider());
     }
 
     @Override

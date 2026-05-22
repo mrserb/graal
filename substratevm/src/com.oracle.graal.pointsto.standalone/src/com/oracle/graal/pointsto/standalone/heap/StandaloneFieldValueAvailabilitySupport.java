@@ -41,7 +41,7 @@ import jdk.vm.ci.meta.JavaConstant;
  * shadow-heap snapshotting.
  *
  * Static fields may only use shadow-heap values after standalone-managed build-time initialization
- * completed successfully for the declaring class. Runtime-only, denied, downgraded, or not-yet
+ * completed successfully for the declaring class. Runtime-only, denied, failed, or not-yet
  * started classes remain unavailable to snapshotting. Direct reads that intentionally stay on the
  * original provider path use {@link #shouldReadStaticFieldFromShadowHeap(AnalysisField)} to choose
  * their source of truth.

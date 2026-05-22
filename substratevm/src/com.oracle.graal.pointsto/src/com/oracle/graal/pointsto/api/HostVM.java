@@ -43,6 +43,7 @@ import com.oracle.graal.pointsto.BigBang;
 import com.oracle.graal.pointsto.PointsToAnalysis;
 import com.oracle.graal.pointsto.flow.AnalysisParsedGraph.Stage;
 import com.oracle.graal.pointsto.flow.InvokeTypeFlow;
+import com.oracle.graal.pointsto.flow.MethodTypeFlowBuilder.ObjectConstantHandler;
 import com.oracle.graal.pointsto.meta.AnalysisField;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.graal.pointsto.meta.AnalysisType;
@@ -278,6 +279,14 @@ public abstract class HostVM {
      * @param graph the method graph
      */
     public void methodBeforeTypeFlowCreationHook(BigBang bb, AnalysisMethod method, StructuredGraph graph) {
+    }
+
+    /**
+     * Supplies the object-constant handling policy used while seeding a method's initial analysis
+     * facts and creating constant source flows.
+     */
+    public ObjectConstantHandler createMethodTypeFlowBuilderObjectConstantHandler(@SuppressWarnings("unused") PointsToAnalysis bb) {
+        return ObjectConstantHandler.PRECISE;
     }
 
     /**

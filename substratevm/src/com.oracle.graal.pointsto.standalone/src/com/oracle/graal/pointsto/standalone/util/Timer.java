@@ -75,7 +75,8 @@ public class Timer implements AutoCloseable {
     }
 
     /**
-     * Prints the end-of-analysis summary for downgraded build-time class-initialization failures.
+     * Prints the end-of-analysis summary for build-time class-initialization failures that fell
+     * back to runtime handling.
      */
     private void printClassInitializationFailures() {
         int failureCount = host.getClassInitializationFailureCount();

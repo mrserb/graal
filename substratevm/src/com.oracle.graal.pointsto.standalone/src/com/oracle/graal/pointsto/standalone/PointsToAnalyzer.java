@@ -258,8 +258,8 @@ public final class PointsToAnalyzer {
         bigbang.markInitializationFinished();
     }
 
-    private static StandaloneClassInitializationStrategy createClassInitializationStrategy() {
-        return new BuildTimeHeapClassInitializationStrategy();
+    private StandaloneClassInitializationStrategy createClassInitializationStrategy() {
+        return new BuildTimeHeapClassInitializationStrategy(options);
     }
 
     private String getAnalysisName(String entryClass) {

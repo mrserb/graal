@@ -25,9 +25,12 @@
 
 package com.oracle.graal.pointsto.standalone;
 
+import java.util.LinkedHashSet;
 import java.util.Set;
 
 import com.oracle.graal.pointsto.meta.AnalysisType;
+
+import jdk.graal.compiler.options.OptionValues;
 
 /**
  * Standalone build-time heap mode initializes reachable classes eagerly, except for guest classes
@@ -53,11 +56,36 @@ public final class BuildTimeHeapClassInitializationStrategy implements Standalon
                     "sun.lwawt.",
                     "sun.swing.",
                     "com.sun.java.swing.");
+    private final Set<String> deniedBuildTimeInitializationTypes;
+    private final Set<String> deniedBuildTimeInitializationPackages;
+
+    public BuildTimeHeapClassInitializationStrategy(OptionValues options) {
+        deniedBuildTimeInitializationTypes = collectDeniedTypes(options);
+        deniedBuildTimeInitializationPackages = collectDeniedPackages(options);
+    }
 
     @Override
     public boolean shouldInitializeAtBuildTime(AnalysisType type) {
         String javaName = type.toJavaName(true);
-        return !DENIED_BUILD_TIME_INITIALIZATION_TYPES.contains(javaName) &&
-                        DENIED_BUILD_TIME_INITIALIZATION_PACKAGES.stream().noneMatch(javaName::startsWith);
+        return !deniedBuildTimeInitializationTypes.contains(javaName) &&
+                        deniedBuildTimeInitializationPackages.stream().noneMatch(javaName::startsWith);
+    }
+
+    private static Set<String> collectDeniedTypes(OptionValues options) {
+        LinkedHashSet<String> deniedTypes = new LinkedHashSet<>(DENIED_BUILD_TIME_INITIALIZATION_TYPES);
+        deniedTypes.addAll(StandaloneOptions.StandaloneExtraRuntimeInitializedClasses.getValue(options).values());
+        return Set.copyOf(deniedTypes);
+    }
+
+    private static Set<String> collectDeniedPackages(OptionValues options) {
+        LinkedHashSet<String> deniedPackages = new LinkedHashSet<>(DENIED_BUILD_TIME_INITIALIZATION_PACKAGES);
+        for (String packagePrefix : StandaloneOptions.StandaloneExtraRuntimeInitializedPackages.getValue(options).values()) {
+            deniedPackages.add(normalizePackagePrefix(packagePrefix));
+        }
+        return Set.copyOf(deniedPackages);
+    }
+
+    private static String normalizePackagePrefix(String packagePrefix) {
+        return packagePrefix.endsWith(".") ? packagePrefix : packagePrefix + ".";
     }
 }

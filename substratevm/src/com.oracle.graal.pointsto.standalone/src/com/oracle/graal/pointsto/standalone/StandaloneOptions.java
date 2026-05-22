@@ -29,6 +29,7 @@ package com.oracle.graal.pointsto.standalone;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+import com.oracle.svm.shared.option.AccumulatingLocatableMultiOptionValue;
 import com.oracle.svm.shared.option.HostedOptionKey;
 
 import jdk.graal.compiler.options.Option;
@@ -60,11 +61,27 @@ public class StandaloneOptions {
     public static final OptionKey<String> StandaloneAnalysisReportsPath = new OptionKey<>("./");
 
     /**
-     * Prints a standalone summary of guest class initializations that failed and were downgraded to
-     * runtime-style handling during analysis.
+     * Prints a standalone summary of guest class initializations that failed and then fell back to
+     * runtime handling during analysis.
      */
-    @Option(help = "Prints downgraded standalone class-initialization failures with the first stack trace per class.")//
+    @Option(help = "Prints standalone class-initialization failures that fall back to runtime handling, with the first stack trace per class.")//
     public static final HostedOptionKey<Boolean> StandalonePrintClassInitializationFailures = new HostedOptionKey<>(true);
+
+    /**
+     * Additional exact class names that standalone should force to runtime handling instead of
+     * eager build-time initialization. Intended for standalone experiments and tests.
+     */
+    @Option(help = "Additional exact class names that standalone should keep runtime initialized for experiments.", type = OptionType.Debug)//
+    public static final HostedOptionKey<AccumulatingLocatableMultiOptionValue.Strings> StandaloneExtraRuntimeInitializedClasses = new HostedOptionKey<>(
+                    AccumulatingLocatableMultiOptionValue.Strings.buildWithCommaDelimiter());
+
+    /**
+     * Additional package prefixes that standalone should force to runtime handling instead of
+     * eager build-time initialization. Intended for standalone experiments and tests.
+     */
+    @Option(help = "Additional package prefixes that standalone should keep runtime initialized for experiments.", type = OptionType.Debug)//
+    public static final HostedOptionKey<AccumulatingLocatableMultiOptionValue.Strings> StandaloneExtraRuntimeInitializedPackages = new HostedOptionKey<>(
+                    AccumulatingLocatableMultiOptionValue.Strings.buildWithCommaDelimiter());
 
     /**
      * Controls whether standalone analysis should assume a closed type world for dispatch and

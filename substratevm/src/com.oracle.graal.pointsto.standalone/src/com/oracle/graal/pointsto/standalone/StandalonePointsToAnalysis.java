@@ -33,13 +33,10 @@ import com.oracle.graal.pointsto.ClassInclusionPolicy;
 import com.oracle.graal.pointsto.PointsToAnalysis;
 import com.oracle.graal.pointsto.api.HostVM;
 import com.oracle.graal.pointsto.constraints.UnsupportedFeatures;
-import com.oracle.graal.pointsto.flow.MethodFlowsGraph;
-import com.oracle.graal.pointsto.flow.MethodTypeFlowBuilder;
 import com.oracle.graal.pointsto.meta.AnalysisMetaAccess;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.meta.AnalysisUniverse;
-import com.oracle.graal.pointsto.meta.PointsToAnalysisMethod;
 import com.oracle.graal.pointsto.util.AnalysisError;
 import com.oracle.graal.pointsto.util.TimerCollection;
 
@@ -78,11 +75,6 @@ public class StandalonePointsToAnalysis extends PointsToAnalysis {
     }
 
     @Override
-    public MethodTypeFlowBuilder createMethodTypeFlowBuilder(PointsToAnalysis bb, PointsToAnalysisMethod method, MethodFlowsGraph flowsGraph, MethodFlowsGraph.GraphKind graphKind) {
-        return new StandaloneMethodTypeFlowBuilder(bb, method, flowsGraph, graphKind);
-    }
-
-    @Override
     public void onTypeReachable(AnalysisType type) {
         AnalysisMethod clinitMethod = type.getClassInitializer();
         if (!shouldAddClassInitializerRoot(type, clinitMethod)) {
@@ -99,10 +91,7 @@ public class StandalonePointsToAnalysis extends PointsToAnalysis {
         if (clinitMethod == null) {
             return false;
         }
-        StandaloneHost.ClassInitializationOutcome initializationOutcome = standaloneHost.getClassInitializationOutcome(type);
-        AnalysisError.guarantee(initializationOutcome != StandaloneHost.ClassInitializationOutcome.PENDING,
-                        "Build-time class-initialization outcome must be decided before rooting %s", type.toJavaName());
-        return switch (initializationOutcome) {
+        return switch (standaloneHost.getClassInitializationOutcome(type)) {
             case INITIALIZED -> false;
             case RUNTIME_ONLY, FAILED -> addedClinits.add(clinitMethod);
             case PENDING -> throw AnalysisError.shouldNotReachHere("Pending build-time class-initialization outcome for " + type.toJavaName());

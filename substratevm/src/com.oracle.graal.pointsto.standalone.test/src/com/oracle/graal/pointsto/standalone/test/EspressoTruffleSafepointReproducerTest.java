@@ -53,7 +53,7 @@ public class EspressoTruffleSafepointReproducerTest extends StandaloneAnalysisTe
                 runAnalysisMethod(SmallReachabilityCase.class, entryMethod);
             }
         }
-        assertEquals("Expected the custom common-pool worker factory to eliminate downgraded Espresso class-initialization failures.", 0,
+        assertEquals("Expected the custom common-pool worker factory to eliminate Espresso class-initialization failures that fall back to runtime handling.", 0,
                         standaloneHost().getClassInitializationFailureCount());
     }
 }

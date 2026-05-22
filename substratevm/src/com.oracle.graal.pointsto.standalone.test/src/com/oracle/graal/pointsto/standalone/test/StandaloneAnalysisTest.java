@@ -82,6 +82,8 @@ public abstract class StandaloneAnalysisTest {
 
     private static final String ANALYSIS_ENTRY_POINTS_FILE_OPTION = "-H:" + StandaloneOptions.StandaloneAnalysisEntryPointsFile.getName() + "=";
     private static final String ANALYSIS_TARGET_APP_CP_OPTION = "-H:" + StandaloneOptions.StandaloneAnalysisTargetAppCP.getName() + "=";
+    private static final String EXTERNAL_ANALYSIS_OPTION_COUNT_PROPERTY = "com.oracle.graal.pointsto.standalone.test.analysis.option.count";
+    private static final String EXTERNAL_ANALYSIS_OPTION_PROPERTY_PREFIX = "com.oracle.graal.pointsto.standalone.test.analysis.option.";
     private static final String[] NO_OPTIONS = new String[0];
 
     private final List<String> configuredOptions = new ArrayList<>();
@@ -483,10 +485,23 @@ public abstract class StandaloneAnalysisTest {
     private List<String> createCommonArguments(Class<?> classPathRoot, String... extraOptions) {
         List<String> arguments = new ArrayList<>();
         arguments.add(ANALYSIS_TARGET_APP_CP_OPTION + getClassPath(classPathRoot));
+        arguments.addAll(getExternalAnalysisOptions());
         arguments.addAll(Arrays.asList(extraOptions()));
         arguments.addAll(configuredOptions);
         arguments.addAll(Arrays.asList(extraOptions));
         return arguments;
+    }
+
+    private static List<String> getExternalAnalysisOptions() {
+        int optionCount = Integer.getInteger(EXTERNAL_ANALYSIS_OPTION_COUNT_PROPERTY, 0);
+        List<String> options = new ArrayList<>(optionCount);
+        for (int i = 0; i < optionCount; i++) {
+            String option = System.getProperty(EXTERNAL_ANALYSIS_OPTION_PROPERTY_PREFIX + i);
+            if (option != null && !option.isBlank()) {
+                options.add(option);
+            }
+        }
+        return options;
     }
 
     /**

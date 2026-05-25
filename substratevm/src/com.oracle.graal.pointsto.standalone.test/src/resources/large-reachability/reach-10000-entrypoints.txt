@@ -831,7 +831,7 @@ com.sun.org.apache.xalan.internal.xsltc.compiler.XPathParser.insertStep(com.sun.
 com.sun.org.apache.xalan.internal.xsltc.compiler.XPathParser.isElementAxis(int)
 com.sun.org.apache.xalan.internal.xsltc.compiler.XSLTC.setSecureProcessing(boolean)
 com.sun.org.apache.xalan.internal.xsltc.compiler.XSLTC.isSecureProcessing
-com.sun.org.apache.xalan.internal.xsltc.compiler.XSLTC.getFeature(jdk.xml.internal.JdkXmlFeatures.XmlFeature)
+com.sun.org.apache.xalan.internal.xsltc.compiler.XSLTC.getFeature(jdk.xml.internal.JdkXmlFeatures$XmlFeature)
 com.sun.org.apache.xalan.internal.xsltc.compiler.XSLTC.getProperty(java.lang.String)
 com.sun.org.apache.xalan.internal.xsltc.compiler.XSLTC.setProperty(java.lang.String;java.lang.Object)
 com.sun.org.apache.xalan.internal.xsltc.compiler.XSLTC.getParser

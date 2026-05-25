@@ -28,12 +28,11 @@ package com.oracle.graal.pointsto.standalone.test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
-import java.awt.Color;
-
 import org.junit.Test;
 
 import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.standalone.StandaloneHost;
+import com.oracle.graal.pointsto.standalone.StandaloneOptions;
 import com.oracle.graal.pointsto.standalone.test.classes.RuntimeInitializedStaticFieldCase;
 
 /**
@@ -41,14 +40,17 @@ import com.oracle.graal.pointsto.standalone.test.classes.RuntimeInitializedStati
  * unified standalone semantics.
  */
 public class RuntimeInitializedStaticFieldTest extends StandaloneAnalysisTest {
+    private static final String DENY_RUNTIME_INITIALIZED_STATIC_FIELD_CASE_OPTION = "-H:" + StandaloneOptions.StandaloneExtraRuntimeInitializedClasses.getName() + "=" +
+                    RuntimeInitializedStaticFieldCase.class.getName();
+
     @Test
     public void testDeniedBuildTimeInitializationKeepsOriginalStaticReads() {
-        runAnalysis(RuntimeInitializedStaticFieldCase.class);
+        runAnalysis(RuntimeInitializedStaticFieldCase.class, DENY_RUNTIME_INITIALIZED_STATIC_FIELD_CASE_OPTION);
 
-        AnalysisType colorType = findClass(Color.class);
-        assertNotNull("Expected Color to be present in the analysis universe.", colorType);
-        assertEquals("AWT classes should stay runtime-only under unified standalone semantics.", StandaloneHost.ClassInitializationOutcome.RUNTIME_ONLY,
-                        standaloneHost().getClassInitializationOutcome(colorType));
-        assertReachable(findMethod(Color.class, "getRGB"));
+        AnalysisType caseType = findClass(RuntimeInitializedStaticFieldCase.class);
+        assertNotNull("Expected the runtime-initialized fixture to be present in the analysis universe.", caseType);
+        assertEquals("The fixture class should stay runtime-only under unified standalone semantics.", StandaloneHost.ClassInitializationOutcome.RUNTIME_ONLY,
+                        standaloneHost().getClassInitializationOutcome(caseType));
+        assertReachable(findMethod(RuntimeInitializedStaticFieldCase.ColorBox.class, "rgb"));
     }
 }

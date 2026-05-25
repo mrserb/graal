@@ -25,25 +25,37 @@
 
 package com.oracle.graal.pointsto.standalone.test.classes;
 
-import java.awt.Color;
-
 /**
- * Fixture that accesses a static field from a package intentionally denied for standalone
- * build-time initialization.
+ * Fixture whose own class initialization is denied explicitly by the standalone test, so direct
+ * reads of its static field must stay on original-provider semantics.
  */
 public final class RuntimeInitializedStaticFieldCase {
+    private static final ColorBox BLACK = new ColorBox(0x000000);
+
     private RuntimeInitializedStaticFieldCase() {
     }
 
     /**
-     * Uses {@link Color#BLACK} so standalone must keep direct static reads on original-provider
-     * semantics while refusing to snapshot AWT statics into the shadow heap.
+     * Uses a non-constant-reference static field so the runtime-only class still needs a direct
+     * static read instead of class-file constant folding.
      */
     public static int blackRgb() {
-        return Color.BLACK.getRGB();
+        return BLACK.rgb();
     }
 
     public static void main(String[] args) {
         blackRgb();
+    }
+
+    public static final class ColorBox {
+        private final int rgb;
+
+        private ColorBox(int rgb) {
+            this.rgb = rgb;
+        }
+
+        public int rgb() {
+            return rgb;
+        }
     }
 }

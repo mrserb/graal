@@ -45,7 +45,7 @@ public final class StandaloneObjectConstantHandler implements ObjectConstantHand
     }
 
     @Override
-    public AnalysisType getTypeOnlyExposedType(JavaConstant constantValue) {
+    public AnalysisType getExposedTypeForOpaqueConstant(JavaConstant constantValue) {
         return standaloneConstantReflection.getUnsupportedObjectType(constantValue);
     }
 }

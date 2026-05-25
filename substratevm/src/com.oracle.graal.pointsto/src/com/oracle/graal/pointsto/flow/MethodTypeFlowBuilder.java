@@ -191,7 +191,7 @@ public class MethodTypeFlowBuilder {
          * non-null type-only state, or {@code null} when the default precise constant handling
          * should be used.
          */
-        AnalysisType getTypeOnlyExposedType(JavaConstant constantValue);
+        AnalysisType getExposedTypeForOpaqueConstant(JavaConstant constantValue);
     }
 
     protected final PointsToAnalysis bb;
@@ -550,7 +550,7 @@ public class MethodTypeFlowBuilder {
 
     private static void registerObjectConstantRoot(AbstractAnalysisEngine bb, ObjectConstantHandler objectConstantHandler, JavaConstant constantValue, AnalysisType stampedType,
                     BytecodePosition position) {
-        AnalysisType exposedType = objectConstantHandler.getTypeOnlyExposedType(constantValue);
+        AnalysisType exposedType = objectConstantHandler.getExposedTypeForOpaqueConstant(constantValue);
         if (exposedType != null) {
             exposedType.registerAsReachable(position);
             return;
@@ -759,7 +759,7 @@ public class MethodTypeFlowBuilder {
      * Creates the source flow for an object constant encountered in the graph.
      */
     private ConstantTypeFlow createObjectConstantSource(AnalysisType stampedType, JavaConstant constantValue, BytecodePosition position) {
-        AnalysisType exposedType = objectConstantHandler.getTypeOnlyExposedType(constantValue);
+        AnalysisType exposedType = objectConstantHandler.getExposedTypeForOpaqueConstant(constantValue);
         if (exposedType != null) {
             return createTypeOnlyObjectConstantSource(exposedType, position);
         }

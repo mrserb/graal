@@ -252,7 +252,6 @@ def update_build_options_table():
             new_content = content[:table_start] + new_table + content[table_end:]
         else:
             mx.abort("Could not find table or auto-generation markers in BuildOptions.md")
-            return False
     else:
         # Use marker-based replacement (preferred method)
         mx.log("Found auto-generation markers - using clean replacement")

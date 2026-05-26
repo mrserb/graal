@@ -723,7 +723,6 @@ suite = {
             "dependencies": [
                 "compiler:GRAAL",
             ],
-            "requires": [],
             "checkstyle": "com.oracle.svm.test",
             "workingSets": "SVM,Test",
             "annotationProcessors": [],

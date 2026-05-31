@@ -100,11 +100,12 @@ public class ServiceCatalogSupport {
         registerModuleDescriptorSetTransformer(access, ModuleDescriptor.class, "exports");
         registerModuleDescriptorSetTransformer(access, ModuleDescriptor.class, "opens");
         registerModuleDescriptorSetTransformer(access, ModuleDescriptor.class, "provides");
-        registerModuleDescriptorSetTransformer(access, ModuleDescriptor.class, "packages");
         /*
-         * Do not compact ModuleDescriptor.uses or Exports/Opens.targets here. Those string-valued
-         * descriptor sets can contain type or module names that other features encode via field
-         * value transformers, and only one transformer can be registered per field.
+         * Do not compact ModuleDescriptor.packages: JCK checks the concrete class used by the JDK
+         * implementation. Also do not compact ModuleDescriptor.uses or Exports/Opens.targets.
+         * Those string-valued descriptor sets can contain type or module names that other features
+         * encode via field value transformers, and only one transformer can be registered per
+         * field.
          */
     }
 

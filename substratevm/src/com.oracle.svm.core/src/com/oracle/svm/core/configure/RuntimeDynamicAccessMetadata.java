@@ -56,6 +56,7 @@ import com.oracle.svm.shared.util.VMError;
 public class RuntimeDynamicAccessMetadata {
 
     private final Object[] conditions;
+    private volatile boolean satisfied;
     private final boolean preserved;
 
     @Platforms(Platform.HOSTED_ONLY.class) //
@@ -106,7 +107,7 @@ public class RuntimeDynamicAccessMetadata {
 
     @Platforms(Platform.HOSTED_ONLY.class)
     public EconomicSet<Class<?>> getTypesForEncoding() {
-        if (conditions == null) {
+        if (conditions == null || satisfied) {
             return EconomicSet.emptySet();
         } else {
             EconomicSet<Class<?>> types = EconomicSet.create();
@@ -129,20 +130,25 @@ public class RuntimeDynamicAccessMetadata {
     }
 
     /**
-     * Checks if any of the conditions has been satisfied.
+     * Checks if any of the conditions has been satisfied. Once a condition becomes satisfied, the
+     * result is cached. This code can be concurrently executed, however there are no concurrency
+     * primitives beyond the volatile cache. The implementation relies on the fact that checking if a
+     * condition is satisfied is an idempotent operation.
      *
      * @return <code>true</code> if any of the elements is satisfied.
      */
     public boolean satisfied() {
-        boolean result = false;
-        final var localConditions = conditions;
-        if (localConditions == null) {
-            result = true;
-        } else {
-            for (Object condition : localConditions) {
-                if (isSatisfied(condition)) {
-                    result = true;
-                    break;
+        boolean result = satisfied;
+        if (!result) {
+            final var localConditions = conditions;
+            if (localConditions == null) {
+                satisfied = result = true;
+            } else {
+                for (Object condition : localConditions) {
+                    if (isSatisfied(condition)) {
+                        satisfied = result = true;
+                        break;
+                    }
                 }
             }
         }
@@ -157,10 +163,10 @@ public class RuntimeDynamicAccessMetadata {
     }
 
     /*
-     * Used in snippets, returns true only if the condition is unconditionally satisfied.
+     * Used in snippets, returns true only if the condition was already satisfied beforehand.
      */
     public final boolean fastPathSatisfied() {
-        return conditions == null;
+        return satisfied;
     }
 
     public boolean isPreserved() {
@@ -170,11 +176,12 @@ public class RuntimeDynamicAccessMetadata {
     @Override
     public String toString() {
         String conditionsString = this.conditions == null ? "[]" : Arrays.toString(this.conditions);
-        return conditionsString + " = " + satisfied();
+        return conditionsString + " = " + satisfied;
     }
 
     private RuntimeDynamicAccessMetadata(Object[] conditions, boolean preserved) {
         this.conditions = conditions == null || conditions.length == 0 ? null : canonicalConditions(conditions);
+        this.satisfied = this.conditions == null;
         this.preserved = preserved;
     }
 

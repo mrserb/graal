@@ -1222,21 +1222,6 @@ public class ModuleLayerFeature implements InternalFeature {
             return nameToModule;
         }
 
-        private static boolean shouldCompactModuleMetadata() {
-            return !ImageLayerBuildingSupport.buildingImageLayer() && !SubstrateOptions.SharedLibrary.getValue();
-        }
-
-        private static Map<String, Set<Module>> compactPackageMap(Map<String, Set<Module>> packages) {
-            if (!shouldCompactModuleMetadata()) {
-                return packages;
-            }
-            Map<String, Set<Module>> compactPackages = new HashMap<>(packages.size());
-            for (Map.Entry<String, Set<Module>> entry : packages.entrySet()) {
-                compactPackages.put(entry.getKey(), Set.copyOf(entry.getValue()));
-            }
-            return compactPackages;
-        }
-
         private void rescan(AnalysisAccessBase access, Map<String, Set<Module>> packages, Module m, Field modulePackagesField) {
             if (ImageLayerBuildingSupport.buildingImageLayer()) {
                 access.rescanObject(packages, scanReason);
@@ -1319,11 +1304,10 @@ public class ModuleLayerFeature implements InternalFeature {
             if (fieldValue == null) {
                 return;
             }
-            Map<String, Set<Module>> encodedFieldValue = new HashMap<>(fieldValue.size());
-            for (Map.Entry<String, Set<Module>> entry : fieldValue.entrySet()) {
-                encodedFieldValue.put(encoder.encodePackage(entry.getKey()), entry.getValue());
-            }
-            encodedFieldValue = compactPackageMap(encodedFieldValue);
+            Map<String, Set<Module>> encodedFieldValue = fieldValue.entrySet().stream()
+                            .collect(Collectors.toMap(
+                                            e -> encoder.encodePackage(e.getKey()),
+                                            Map.Entry::getValue));
             field.set(module, encodedFieldValue);
             if (ImageLayerBuildingSupport.buildingImageLayer()) {
                 accessImpl.rescanObject(encodedFieldValue, scanReason);
@@ -1397,8 +1381,7 @@ public class ModuleLayerFeature implements InternalFeature {
         }
 
         void patchModuleLayerNameToModuleField(AnalysisAccessBase accessImpl, ModuleLayer moduleLayer, Map<String, Module> nameToModule) throws IllegalAccessException {
-            Map<String, Module> runtimeNameToModule = shouldCompactModuleMetadata() ? Map.copyOf(nameToModule) : nameToModule;
-            moduleLayerNameToModuleField.set(moduleLayer, runtimeNameToModule);
+            moduleLayerNameToModuleField.set(moduleLayer, nameToModule);
             accessImpl.rescanField(moduleLayer, moduleLayerNameToModuleField, scanReason);
         }
 

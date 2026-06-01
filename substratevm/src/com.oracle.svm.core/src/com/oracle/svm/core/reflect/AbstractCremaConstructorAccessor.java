@@ -69,7 +69,7 @@ abstract class AbstractCremaConstructorAccessor extends AbstractCremaAccessor im
         Object[] args = initialArguments == null ? NO_ARGS : initialArguments;
         verifyArguments(args);
         Class<?> instantiatedClass = getInstantiatedClass();
-        if (instantiatedClass.isInterface() || instantiatedClass.isArray() || instantiatedClass.isPrimitive() || Modifier.isAbstract(instantiatedClass.getModifiers())) {
+        if (Modifier.isAbstract(instantiatedClass.getModifiers())) {
             throw new InstantiationException(instantiatedClass.getName());
         }
         EnsureClassInitializedNode.ensureClassInitialized(instantiatedClass);

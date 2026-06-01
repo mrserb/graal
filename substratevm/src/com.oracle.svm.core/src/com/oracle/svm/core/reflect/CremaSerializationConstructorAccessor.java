@@ -25,6 +25,7 @@
 package com.oracle.svm.core.reflect;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Modifier;
 
 import com.oracle.svm.core.hub.crema.CremaSupport;
 
@@ -52,7 +53,7 @@ public final class CremaSerializationConstructorAccessor extends AbstractCremaCo
     }
 
     private CremaSerializationConstructorAccessor(Class<?> serializationTargetClass, Class<?> constructorDeclaringClass, Class<?>[] constructorParameterTypes, ResolvedJavaMethod constructorToCall) {
-        super(constructorToCall, constructorDeclaringClass, constructorParameterTypes);
+        super(constructorToCall, constructorDeclaringClass, constructorParameterTypes, Modifier.isAbstract(serializationTargetClass.getModifiers()));
         this.serializationTargetClass = serializationTargetClass;
     }
 

@@ -24,12 +24,14 @@
  */
 package com.oracle.svm.core.reflect;
 
+import java.lang.reflect.Modifier;
+
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 public final class CremaConstructorAccessor extends AbstractCremaConstructorAccessor {
 
     public CremaConstructorAccessor(ResolvedJavaMethod targetMethod, Class<?> declaringClass, Class<?>[] parameterTypes) {
-        super(targetMethod, declaringClass, parameterTypes);
+        super(targetMethod, declaringClass, parameterTypes, Modifier.isAbstract(declaringClass.getModifiers()));
     }
 
     @Override

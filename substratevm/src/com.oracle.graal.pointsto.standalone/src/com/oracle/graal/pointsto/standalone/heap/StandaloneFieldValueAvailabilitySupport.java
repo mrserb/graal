@@ -32,6 +32,7 @@ import java.util.function.Supplier;
 import com.oracle.graal.pointsto.heap.value.ValueSupplier;
 import com.oracle.graal.pointsto.meta.AnalysisField;
 import com.oracle.graal.pointsto.standalone.StandaloneHost;
+import com.oracle.graal.pointsto.standalone.StandaloneHost.ClassInitializationOutcome;
 import com.oracle.graal.pointsto.util.AnalysisError;
 
 import jdk.vm.ci.meta.JavaConstant;
@@ -43,14 +44,35 @@ import jdk.vm.ci.meta.JavaConstant;
  * Static fields may only use shadow-heap values after standalone-managed build-time initialization
  * completed successfully for the declaring class. Runtime-only, denied, failed, or not-yet
  * started classes remain unavailable to snapshotting. Direct reads that intentionally stay on the
- * original provider path use {@link #shouldReadStaticFieldFromShadowHeap(AnalysisField)} to choose
- * their source of truth.
+ * original provider path use {@link #getStaticFieldReadPolicy(AnalysisField)} to choose their
+ * source of truth.
  *
  * Guest constant reflection may also report a Java {@code null} reference to mean that a guest
  * field value is not available yet. This helper folds that temporary-null state under the same
  * availability model by exposing it through {@link ValueSupplier}.
  */
 public final class StandaloneFieldValueAvailabilitySupport {
+    /**
+     * Describes how a direct static field read should obtain its value under standalone-managed
+     * class initialization.
+     */
+    public enum StaticFieldReadPolicy {
+        /**
+         * Read the value from the standalone shadow heap after build-time initialization completed.
+         */
+        SHADOW_HEAP,
+        /**
+         * Keep the original constant-reflection provider semantics for runtime-only or failed
+         * build-time initialization.
+         */
+        ORIGINAL_PROVIDER,
+        /**
+         * Treat the value as temporarily unavailable while build-time initialization is still
+         * pending.
+         */
+        UNAVAILABLE
+    }
+
     private final StandaloneHost host;
 
     public StandaloneFieldValueAvailabilitySupport(StandaloneHost host) {
@@ -58,11 +80,15 @@ public final class StandaloneFieldValueAvailabilitySupport {
     }
 
     /**
-     * Returns whether a direct static read may use the standalone shadow heap as its source of
-     * truth.
+     * Returns the source a direct static read may use.
      */
-    public boolean shouldReadStaticFieldFromShadowHeap(AnalysisField field) {
-        return staticFieldSnapshottingAllowed(field);
+    public StaticFieldReadPolicy getStaticFieldReadPolicy(AnalysisField field) {
+        AnalysisError.guarantee(field.isStatic(), "Static field read policy requested for non-static field %s", field);
+        return switch (getClassInitializationOutcome(field)) {
+            case INITIALIZED -> StaticFieldReadPolicy.SHADOW_HEAP;
+            case RUNTIME_ONLY, FAILED -> StaticFieldReadPolicy.ORIGINAL_PROVIDER;
+            case PENDING -> StaticFieldReadPolicy.UNAVAILABLE;
+        };
     }
 
     /**
@@ -98,7 +124,15 @@ public final class StandaloneFieldValueAvailabilitySupport {
         if (!field.isStatic()) {
             return true;
         }
-        return host.awaitClassInitializationOutcomeIfStarted(field.getDeclaringClass()).allowsStaticFieldSnapshotting();
+        return getClassInitializationOutcome(field).allowsStaticFieldSnapshotting();
+    }
+
+    private ClassInitializationOutcome getClassInitializationOutcome(AnalysisField field) {
+        ClassInitializationOutcome outcome = host.getClassInitializationOutcome(field.getDeclaringClass());
+        if (outcome == ClassInitializationOutcome.PENDING) {
+            return host.registerPendingStaticFieldRead(field);
+        }
+        return outcome;
     }
 
     private static JavaConstant probeValue(Supplier<JavaConstant> rawReader, AtomicReference<JavaConstant> materialized) {

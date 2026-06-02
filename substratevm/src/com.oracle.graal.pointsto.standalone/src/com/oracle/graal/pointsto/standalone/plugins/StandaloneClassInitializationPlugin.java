@@ -86,13 +86,14 @@ public final class StandaloneClassInitializationPlugin implements ClassInitializ
     }
 
     /**
-     * Triggers standalone build-time initialization for reachable analysis types when the
-     * configured host strategy currently allows it.
+     * Starts standalone build-time initialization for reachable analysis types when the configured
+     * host strategy currently allows it. The result is observed lazily by field-value availability
+     * checks.
      */
     @Override
     public boolean apply(GraphBuilderContext builder, ResolvedJavaType type, Supplier<FrameState> frameState) {
         if (type instanceof AnalysisType analysisType) {
-            host.maybeInitializeAtBuildTime(analysisType);
+            host.maybeInitializeAtBuildTimeLazily(analysisType);
         }
         return false;
     }

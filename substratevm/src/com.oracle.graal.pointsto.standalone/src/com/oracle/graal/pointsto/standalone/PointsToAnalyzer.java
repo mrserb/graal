@@ -195,6 +195,7 @@ public final class PointsToAnalyzer {
         ClassInclusionPolicy classInclusionPolicy = new ClassInclusionPolicy.DefaultAllInclusionPolicy("Included in the base image");
         bigbang = new StandalonePointsToAnalysis(options, aUniverse, standaloneHost, aMetaAccess, snippetReflection, aConstantReflection, aProviders.getWordTypes(),
                         debugContext, new TimerCollection(), classInclusionPolicy);
+        standaloneHost.setBigBang(bigbang);
         aUniverse.setBigBang(bigbang);
         ImageHeap heap = new ImageHeap();
         HostedValuesProvider hostedValuesProvider = new StandaloneHostedValuesProvider(aMetaAccess, aUniverse, fieldValueAvailabilitySupport);

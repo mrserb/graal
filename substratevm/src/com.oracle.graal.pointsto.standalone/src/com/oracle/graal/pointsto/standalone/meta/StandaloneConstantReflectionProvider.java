@@ -183,13 +183,20 @@ public class StandaloneConstantReflectionProvider implements ConstantReflectionP
             assert commonPoolSubstitution != null : "A substitution for the common pool must be provided if commonPoolField is set.";
             return commonPoolSubstitution;
         }
-        if (field.isStatic() && fieldValueAvailabilitySupport.shouldReadStaticFieldFromShadowHeap(field)) {
-            /*
-             * Runtime-initialized classes keep their original provider semantics. Only classes
-             * whose build-time initialization completed may use shadow-heap snapshots as the source
-             * of truth for static field reads.
-             */
-            return field.getDeclaringClass().getOrComputeData().readFieldValue(field);
+        if (field.isStatic()) {
+            switch (fieldValueAvailabilitySupport.getStaticFieldReadPolicy(field)) {
+                case SHADOW_HEAP:
+                    /*
+                     * Runtime-initialized classes keep their original provider semantics. Only classes
+                     * whose build-time initialization completed may use shadow-heap snapshots as the
+                     * source of truth for static field reads.
+                     */
+                    return field.getDeclaringClass().getOrComputeData().readFieldValue(field);
+                case UNAVAILABLE:
+                    return null;
+                case ORIGINAL_PROVIDER:
+                    break;
+            }
         }
         if (receiver instanceof ImageHeapInstance imageHeapInstance) {
             imageHeapInstance.ensureReaderInstalled();

@@ -30,6 +30,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.Comparator;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -38,6 +39,7 @@ import com.oracle.graal.pointsto.BigBang;
 import com.oracle.graal.pointsto.PointsToAnalysis;
 import com.oracle.graal.pointsto.api.HostVM;
 import com.oracle.graal.pointsto.flow.MethodTypeFlowBuilder.ObjectConstantHandler;
+import com.oracle.graal.pointsto.meta.AnalysisField;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.meta.HostedProviders;
@@ -85,6 +87,8 @@ public class StandaloneHost extends HostVM {
     private final ConcurrentMap<AnalysisType, String> firstClassInitializationFailureStackTraces = new ConcurrentHashMap<>();
     private final ConcurrentMap<AnalysisType, ClassInitializationOutcome> classInitializationOutcomes = new ConcurrentHashMap<>();
     private final ConcurrentMap<AnalysisType, AnalysisFuture<ClassInitializationOutcome>> classInitializationTasks = new ConcurrentHashMap<>();
+    private final ConcurrentMap<AnalysisType, Set<AnalysisField>> pendingStaticFieldReads = new ConcurrentHashMap<>();
+    private volatile BigBang bigbang;
 
     public StandaloneHost(OptionValues options, String imageName, StandaloneClassInitializationStrategy classInitializationStrategy, boolean closedTypeWorld) {
         super(options, /*- ClassLoader not supported. */ null);
@@ -92,6 +96,10 @@ public class StandaloneHost extends HostVM {
         this.closedTypeWorld = closedTypeWorld;
         this.classInitializationStrategy = classInitializationStrategy;
         this.printClassInitializationFailures = StandaloneOptions.StandalonePrintClassInitializationFailures.getValue(options);
+    }
+
+    public void setBigBang(BigBang bigbang) {
+        this.bigbang = bigbang;
     }
 
     private boolean shouldInitializeAtBuildTime(AnalysisType type) {
@@ -103,6 +111,18 @@ public class StandaloneHost extends HostVM {
      * initialization for that type.
      */
     public void maybeInitializeAtBuildTime(AnalysisType type) {
+        maybeInitializeAtBuildTime(type, true);
+    }
+
+    /**
+     * Starts build-time initialization when possible, but does not block the current analysis task on
+     * completion.
+     */
+    public void maybeInitializeAtBuildTimeLazily(AnalysisType type) {
+        maybeInitializeAtBuildTime(type, false);
+    }
+
+    private void maybeInitializeAtBuildTime(AnalysisType type, boolean waitForCompletion) {
         if (!shouldInitializeAtBuildTime(type)) {
             classInitializationOutcomes.putIfAbsent(type, ClassInitializationOutcome.RUNTIME_ONLY);
             return;
@@ -113,13 +133,18 @@ public class StandaloneHost extends HostVM {
         }
         if (type.getWrapped().isInitialized()) {
             classInitializationOutcomes.put(type, ClassInitializationOutcome.INITIALIZED);
+            retryPendingStaticFieldReads(type);
             return;
         }
         AnalysisFuture<ClassInitializationOutcome> newTask = new AnalysisFuture<>(() -> initializeAtBuildTime(type));
         AnalysisFuture<ClassInitializationOutcome> existingTask = classInitializationTasks.putIfAbsent(type, newTask);
         if (existingTask == null) {
-            newTask.ensureDone();
-        } else {
+            if (waitForCompletion) {
+                newTask.ensureDone();
+            } else {
+                bigbang.postTask(unused -> newTask.ensureDone());
+            }
+        } else if (waitForCompletion) {
             existingTask.ensureDone();
         }
     }
@@ -140,15 +165,27 @@ public class StandaloneHost extends HostVM {
     }
 
     /**
-     * Returns the build-time-initialization outcome for {@code type}, waiting only for an already
-     * started standalone initialization attempt to complete.
+     * Registers {@code field} for a later retry when the declaring class is still waiting for
+     * standalone build-time initialization. The returned outcome is re-read after registration so a
+     * caller that races with initialization completion can immediately follow the completed state
+     * instead of waiting for a retry that may already have run.
      */
-    public ClassInitializationOutcome awaitClassInitializationOutcomeIfStarted(AnalysisType type) {
-        AnalysisFuture<ClassInitializationOutcome> task = classInitializationTasks.get(type);
-        if (task != null) {
-            return task.ensureDone();
+    public ClassInitializationOutcome registerPendingStaticFieldRead(AnalysisField field) {
+        AnalysisType declaringClass = field.getDeclaringClass();
+        ClassInitializationOutcome outcome = getClassInitializationOutcome(declaringClass);
+        if (outcome != ClassInitializationOutcome.PENDING || !field.isRead()) {
+            return outcome;
         }
-        return getClassInitializationOutcome(type);
+        Set<AnalysisField> fields = pendingStaticFieldReads.computeIfAbsent(declaringClass, unused -> ConcurrentHashMap.newKeySet());
+        fields.add(field);
+        outcome = getClassInitializationOutcome(declaringClass);
+        if (outcome != ClassInitializationOutcome.PENDING) {
+            fields.remove(field);
+            if (fields.isEmpty()) {
+                pendingStaticFieldReads.remove(declaringClass, fields);
+            }
+        }
+        return outcome;
     }
 
     /**
@@ -213,6 +250,7 @@ public class StandaloneHost extends HostVM {
                 type.getWrapped().initialize();
             }
             classInitializationOutcomes.put(type, ClassInitializationOutcome.INITIALIZED);
+            retryPendingStaticFieldReads(type);
             return ClassInitializationOutcome.INITIALIZED;
         } catch (Throwable failure) {
             /*
@@ -224,6 +262,18 @@ public class StandaloneHost extends HostVM {
         } finally {
             classInitializationTasks.remove(type);
         }
+    }
+
+    private void retryPendingStaticFieldReads(AnalysisType type) {
+        Set<AnalysisField> fields = pendingStaticFieldReads.remove(type);
+        if (fields == null) {
+            return;
+        }
+        fields.forEach(field -> {
+            if (field.isRead()) {
+                type.getUniverse().getHeapScanner().onFieldRead(field);
+            }
+        });
     }
 
     /**

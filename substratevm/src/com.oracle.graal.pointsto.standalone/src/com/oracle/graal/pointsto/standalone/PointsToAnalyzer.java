@@ -204,11 +204,11 @@ public final class PointsToAnalyzer {
         snippetReflection.setHeapScanner(heapScanner);
         HeapSnapshotVerifier heapVerifier = new StandaloneHeapSnapshotVerifier(bigbang, heap, heapScanner);
         aUniverse.setHeapVerifier(heapVerifier);
-        /* Register already created types as assignable. */
+        /* Register already created types as assignable and replay full reachability handling. */
         aUniverse.getTypes().forEach(t -> {
             t.registerAsAssignable(bigbang);
             if (t.isReachable()) {
-                bigbang.onTypeReachable(t);
+                aUniverse.onTypeReachable(t);
             }
         });
         /*

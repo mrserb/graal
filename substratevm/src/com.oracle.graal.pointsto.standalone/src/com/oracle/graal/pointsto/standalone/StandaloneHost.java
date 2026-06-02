@@ -136,16 +136,15 @@ public class StandaloneHost extends HostVM {
             retryPendingStaticFieldReads(type);
             return;
         }
-        AnalysisFuture<ClassInitializationOutcome> newTask = new AnalysisFuture<>(() -> initializeAtBuildTime(type));
-        AnalysisFuture<ClassInitializationOutcome> existingTask = classInitializationTasks.putIfAbsent(type, newTask);
-        if (existingTask == null) {
-            if (waitForCompletion) {
-                newTask.ensureDone();
-            } else {
-                bigbang.postTask(unused -> newTask.ensureDone());
+        AnalysisFuture<ClassInitializationOutcome> task = classInitializationTasks.computeIfAbsent(type, unused -> {
+            AnalysisFuture<ClassInitializationOutcome> createdTask = new AnalysisFuture<>(() -> initializeAtBuildTime(type));
+            if (!waitForCompletion) {
+                bigbang.postTask(unusedTask -> createdTask.ensureDone());
             }
-        } else if (waitForCompletion) {
-            existingTask.ensureDone();
+            return createdTask;
+        });
+        if (waitForCompletion) {
+            task.ensureDone();
         }
     }
 

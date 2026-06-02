@@ -857,6 +857,9 @@ public final class Resources {
 
     @SuppressWarnings("deprecation")
     private static URL createURL(String loaderKey, Module module, String resourceName, int index) {
+        if (JavaNetSubstitutions.isDisabledURLProtocol(RESOURCE_PROTOCOL)) {
+            return null;
+        }
         try {
             String refPart = index != 0 ? '#' + Integer.toString(index) : "";
             String host;
@@ -1019,7 +1022,10 @@ public final class Resources {
             return;
         }
         for (int index = 0; index < entry.getData().length; index++) {
-            resourcesURLs.add(createURL(loaderKey, module, canonicalResourceName, index));
+            URL url = createURL(loaderKey, module, canonicalResourceName, index);
+            if (url != null) {
+                resourcesURLs.add(url);
+            }
         }
     }
 

@@ -24,14 +24,19 @@
  */
 package com.oracle.svm.test;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
 
 import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.nativeimage.hosted.RuntimeReflection;
+import org.graalvm.nativeimage.hosted.RuntimeResourceAccess;
 import org.junit.Assert;
 import org.junit.Test;
+
+import com.oracle.svm.core.jdk.Resources;
 
 @NativeImageBuildArgs({
                 "-H:+UnlockExperimentalVMOptions",
@@ -39,6 +44,7 @@ import org.junit.Test;
                 "--features=com.oracle.svm.test.DisabledURLProtocolTest$TestFeature"
 })
 public class DisabledURLProtocolTest {
+    private static final String REGISTERED_RESOURCE = "resources/resource-test1.txt";
 
     @Test
     @SuppressWarnings("deprecation")
@@ -47,6 +53,17 @@ public class DisabledURLProtocolTest {
         assertUnknownProtocol("file", () -> URI.create("file:/tmp/native-image-url-disable-test").toURL());
         assertUnknownProtocol("resource", () -> new URL("resource:/native-image-url-disable-test"));
         assertUnknownProtocol("resource", () -> URI.create("resource:/native-image-url-disable-test").toURL());
+    }
+
+    @Test
+    public void disabledResourceProtocolIsRejectedByClassResourceURLs() throws IOException {
+        try (InputStream stream = Resources.createInputStream(null, REGISTERED_RESOURCE)) {
+            Assert.assertNotNull(stream);
+        }
+
+        Assert.assertNull(DisabledURLProtocolTest.class.getResource('/' + REGISTERED_RESOURCE));
+        Assert.assertNull(DisabledURLProtocolTest.class.getClassLoader().getResource(REGISTERED_RESOURCE));
+        Assert.assertFalse(DisabledURLProtocolTest.class.getClassLoader().getResources(REGISTERED_RESOURCE).hasMoreElements());
     }
 
     @Test
@@ -77,6 +94,7 @@ public class DisabledURLProtocolTest {
     public static final class TestFeature implements Feature {
         @Override
         public void beforeAnalysis(BeforeAnalysisAccess access) {
+            RuntimeResourceAccess.addResource(TestFeature.class.getModule(), REGISTERED_RESOURCE);
             RuntimeReflection.register(com.oracle.svm.test.protocol.disabled.Handler.class);
             RuntimeReflection.register(com.oracle.svm.test.protocol.disabled.Handler.class.getDeclaredConstructors());
         }

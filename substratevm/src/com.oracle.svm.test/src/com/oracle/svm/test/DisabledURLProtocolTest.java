@@ -34,6 +34,7 @@ import org.junit.Assert;
 import org.junit.Test;
 
 @NativeImageBuildArgs({
+                "-H:+UnlockExperimentalVMOptions",
                 "-H:DisableURLProtocols=file,resource,disabled",
                 "--features=com.oracle.svm.test.DisabledURLProtocolTest$TestFeature"
 })

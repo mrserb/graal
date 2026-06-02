@@ -37,7 +37,6 @@ import java.util.Set;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.dynamicaccess.AccessCondition;
 import org.graalvm.nativeimage.hosted.Feature.DuringSetupAccess;
-import org.graalvm.nativeimage.impl.RuntimeReflectionSupport;
 import org.graalvm.nativeimage.impl.RuntimeResourceSupport;
 import org.graalvm.word.LocationIdentity;
 import org.graalvm.word.Pointer;
@@ -52,6 +51,7 @@ import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
 import com.oracle.svm.core.feature.InternalFeature;
+import com.oracle.svm.core.feature.InternalFeature.InternalFeatureAccess;
 import com.oracle.svm.core.imagelayer.ImageLayerBuildingSupport;
 import com.oracle.svm.core.jdk.resources.ResourceURLConnection;
 import com.oracle.svm.guest.staging.c.CGlobalData;
@@ -66,6 +66,10 @@ import com.oracle.svm.shared.singletons.traits.SingletonLayeredInstallationKind.
 import com.oracle.svm.shared.singletons.traits.SingletonTraits;
 import com.oracle.svm.shared.util.BasedOnJDKClass;
 import com.oracle.svm.shared.util.LogUtils;
+import com.oracle.svm.util.JVMCIReflectionUtil;
+import com.oracle.svm.util.dynamicaccess.JVMCIRuntimeReflection;
+
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 import sun.net.NetProperties;
 
@@ -309,14 +313,13 @@ public final class JavaNetSubstitutions {
         }
         String handlerClassName = handlerClassName(protocol);
         try {
-            Class<?> clazz = access.findClassByName(handlerClassName);
-            if (clazz == null) {
+            ResolvedJavaType handlerClass = ((InternalFeatureAccess) access).findTypeByName(handlerClassName);
+            if (handlerClass == null) {
                 throw new ClassNotFoundException(handlerClassName);
             }
-            RuntimeReflectionSupport reflectionSupport = ImageSingletons.lookup(RuntimeReflectionSupport.class);
-            reflectionSupport.register(AccessCondition.unconditional(), clazz);
-            reflectionSupport.register(AccessCondition.unconditional(), false, clazz.getConstructor());
-        } catch (ClassNotFoundException | NoSuchMethodException | LinkageError e) {
+            JVMCIRuntimeReflection.register(handlerClass);
+            JVMCIRuntimeReflection.register(JVMCIReflectionUtil.getDeclaredConstructor(handlerClass));
+        } catch (ClassNotFoundException | LinkageError e) {
             LogUtils.warning("Registering the " + protocol + " URL protocol failed. This protocol will not be available at runtime. The protocol was set with " +
                             SubstrateOptionsParser.commandArgument(SubstrateOptions.EnableURLProtocols, protocol) +
                             "Cause of the failure: " + e.getMessage());

@@ -189,6 +189,44 @@ public class URLProtocolTraceProcessorTest {
     }
 
     @Test
+    public void urlStreamHandlerProviderLookupDoesNotHideExplicitJarURL() throws Exception {
+        Class<?> configurationSetClass = Class.forName("com.oracle.svm.configure.config.ConfigurationSet");
+        Object configurationSet = configurationSetClass.getConstructor().newInstance();
+        Object processor = newTraceProcessor();
+
+        processor.getClass().getMethod("process", Reader.class, configurationSetClass).invoke(processor, new StringReader("""
+                        [
+                          {
+                            "tracer": "reflect",
+                            "function": "getResources",
+                            "class": "jdk.internal.loader.ClassLoaders$AppClassLoader",
+                            "caller_class": "java.util.ServiceLoader",
+                            "result": true,
+                            "args": ["META-INF/services/java.net.spi.URLStreamHandlerProvider"]
+                          },
+                          {
+                            "tracer": "reflect",
+                            "function": "getResources",
+                            "class": "jdk.internal.loader.ClassLoaders$PlatformClassLoader",
+                            "caller_class": "java.util.ServiceLoader",
+                            "result": true,
+                            "args": ["META-INF/services/java.net.spi.URLStreamHandlerProvider"]
+                          },
+                          {
+                            "tracer": "reflect",
+                            "function": "createURLStreamHandler",
+                            "class": "java.net.URL$DefaultFactory",
+                            "caller_class": "java.net.URL",
+                            "args": ["%s"]
+                          }
+                        ]
+                        """.formatted(JAR_HANDLER)), configurationSet);
+
+        Object reflectionConfiguration = configurationSetClass.getMethod("getReflectionConfiguration").invoke(configurationSet);
+        Assert.assertNotNull(getConfigurationType(reflectionConfiguration, JAR_HANDLER));
+    }
+
+    @Test
     public void appClassPathResourceURLDoesNotHideLaterExplicitJarURL() throws Exception {
         Class<?> configurationSetClass = Class.forName("com.oracle.svm.configure.config.ConfigurationSet");
         Object configurationSet = configurationSetClass.getConstructor().newInstance();

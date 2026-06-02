@@ -51,6 +51,7 @@ class ReflectionProcessor extends AbstractProcessor {
     private static final String APP_CLASS_LOADER = "jdk.internal.loader.ClassLoaders$AppClassLoader";
     private static final String JAR_FILE = "java.util.jar.JarFile";
     private static final String JAR_URL_HANDLER = "sun.net.www.protocol.jar.Handler";
+    private static final String URL_STREAM_HANDLER_PROVIDER = "META-INF/services/java.net.spi.URLStreamHandlerProvider";
 
     private final AccessAdvisor advisor;
     private boolean trackReflectionMetadata = true;
@@ -315,7 +316,11 @@ class ReflectionProcessor extends AbstractProcessor {
          * jar: URL remains recorded. META-INF entries are ignored by the agent's JarFile.getEntry
          * breakpoint, so shouldSuppressJarURLHandler also allows the direct AppClassLoader lookup
          * signal for META-INF resources to suppress a handler lookup that immediately follows
-         * resource enumeration.
+         * resource enumeration. That META-INF shortcut deliberately excludes
+         * META-INF/services/java.net.spi.URLStreamHandlerProvider: java.net.URL consults that service
+         * descriptor before falling back to the built-in JDK protocol handler factory, so suppressing a
+         * following jar handler there would hide real jar: URL use rather than a class-path resource URL
+         * artifact.
          */
         if (resourceName.equals(appClassLoaderResourceLookup)) {
             suppressNextJarURLHandler = true;
@@ -323,7 +328,7 @@ class ReflectionProcessor extends AbstractProcessor {
     }
 
     private boolean shouldSuppressJarURLHandler() {
-        return suppressNextJarURLHandler || isMetaInfResource(appClassLoaderResourceLookup);
+        return suppressNextJarURLHandler || isSuppressibleMetaInfResource(appClassLoaderResourceLookup);
     }
 
     private static boolean isURLStreamHandlerLookup(String function, List<?> args, String handlerClass) {
@@ -332,6 +337,10 @@ class ReflectionProcessor extends AbstractProcessor {
 
     private static boolean isMetaInfResource(String resourceName) {
         return resourceName != null && resourceName.startsWith("META-INF");
+    }
+
+    private static boolean isSuppressibleMetaInfResource(String resourceName) {
+        return isMetaInfResource(resourceName) && !URL_STREAM_HANDLER_PROVIDER.equals(resourceName);
     }
 
     private static boolean isResourceLookup(String function) {

@@ -24,13 +24,17 @@
  */
 package com.oracle.svm.core.jdk;
 
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.net.URLStreamHandler;
 import java.net.URLStreamHandlerFactory;
+import java.util.Collection;
 import java.util.Hashtable;
+import java.util.LinkedHashSet;
 import java.util.Set;
 
+import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.dynamicaccess.AccessCondition;
 import org.graalvm.nativeimage.hosted.RuntimeReflection;
 import org.graalvm.nativeimage.impl.RuntimeResourceSupport;
@@ -43,13 +47,20 @@ import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.InjectAccessors;
 import com.oracle.svm.core.annotate.RecomputeFieldValue;
+import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
+import com.oracle.svm.core.annotate.TargetElement;
 import com.oracle.svm.core.feature.InternalFeature;
 import com.oracle.svm.core.jdk.resources.ResourceURLConnection;
 import com.oracle.svm.guest.staging.c.CGlobalData;
 import com.oracle.svm.guest.staging.c.CGlobalDataFactory;
 import com.oracle.svm.shared.feature.AutomaticallyRegisteredFeature;
 import com.oracle.svm.shared.option.SubstrateOptionsParser;
+import com.oracle.svm.shared.singletons.traits.BuiltinTraits.AllAccess;
+import com.oracle.svm.shared.singletons.traits.BuiltinTraits.BuildtimeAccessOnly;
+import com.oracle.svm.shared.singletons.traits.BuiltinTraits.SingleLayer;
+import com.oracle.svm.shared.singletons.traits.SingletonLayeredInstallationKind.InitialLayerOnly;
+import com.oracle.svm.shared.singletons.traits.SingletonTraits;
 import com.oracle.svm.shared.util.BasedOnJDKClass;
 import com.oracle.svm.shared.util.LogUtils;
 
@@ -61,12 +72,86 @@ final class Target_java_net_URL {
     @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.FromAlias) //
     @SuppressWarnings({"final", "unused"}) //
     // Checkstyle: stop
-    private static Hashtable<?, ?> handlers = new Hashtable<>();
+    private static Hashtable<String, URLStreamHandler> handlers = new Hashtable<>();
     // Checkstyle: resume
+
+    @Alias //
+    private static volatile URLStreamHandlerFactory factory;
 
     @Alias //
     @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.FromAlias) //
     private static URLStreamHandlerFactory defaultFactory = new DefaultFactory();
+
+    @Alias //
+    private static Object streamHandlerLock;
+
+    @Alias //
+    private static native boolean isOverrideable(String protocol);
+
+    @Alias //
+    private static native URLStreamHandler lookupViaProviders(String protocol);
+
+    @Alias //
+    private static native URLStreamHandler lookupViaProperty(String protocol);
+
+    /**
+     * Same as in the JDK except: disabled protocols are rejected before any handler lookup path,
+     * including cached, built-in, factory, provider, property, and default-factory handlers.
+     */
+    @Substitute
+    @TargetElement(name = "getURLStreamHandler")
+    static URLStreamHandler getURLStreamHandler(String protocol) {
+        if (JavaNetSubstitutions.isDisabledURLProtocol(protocol)) {
+            return null;
+        }
+
+        URLStreamHandler handler = handlers.get(protocol);
+        if (handler != null) {
+            return handler;
+        }
+
+        boolean checkedWithFactory = false;
+        URLStreamHandlerFactory currentFactory;
+        boolean overrideable = isOverrideable(protocol);
+        if (overrideable && Target_jdk_internal_misc_VM.isBooted()) {
+            currentFactory = factory;
+            if (currentFactory != null) {
+                handler = currentFactory.createURLStreamHandler(protocol);
+                checkedWithFactory = true;
+            }
+            if (handler == null && !"jar".equalsIgnoreCase(protocol)) {
+                handler = lookupViaProviders(protocol);
+            }
+            if (handler == null) {
+                handler = lookupViaProperty(protocol);
+            }
+        }
+
+        if (handler == null) {
+            handler = defaultFactory.createURLStreamHandler(protocol);
+        }
+
+        synchronized (streamHandlerLock) {
+            URLStreamHandler handler2 = handlers.get(protocol);
+            if (handler2 != null) {
+                return handler2;
+            }
+
+            if (overrideable && !checkedWithFactory && (currentFactory = factory) != null) {
+                handler2 = currentFactory.createURLStreamHandler(protocol);
+            }
+
+            if (handler2 != null) {
+                handler = handler2;
+            }
+
+            if (handler != null) {
+                handlers.put(protocol, handler);
+            }
+        }
+
+        return handler;
+    }
 
     /**
      * Same as in the JDK except: it handles the resource protocol, it does not pull in the JAR
@@ -79,6 +164,9 @@ final class Target_java_net_URL {
 
         @Override
         public URLStreamHandler createURLStreamHandler(String protocol) {
+            if (JavaNetSubstitutions.isDisabledURLProtocol(protocol)) {
+                return null;
+            }
             // Avoid using reflection during bootstrap.
             switch (protocol) {
                 case "file":
@@ -97,8 +185,7 @@ final class Target_java_net_URL {
                 return (URLStreamHandler) handler;
             } catch (ClassNotFoundException e) {
                 if (REFLECTIVELY_ACCESSED_PROTOCOLS.contains(protocol)) {
-                    throw new RuntimeException("Accessing a URL protocol that was not enabled. The URL protocol " + protocol +
-                                    " is supported but not enabled by default. It must be enabled by adding the " + name + " to reachability metadata.");
+                    JavaNetSubstitutions.unsupported(protocol, name);
                 }
             } catch (Exception e) {
                 // For compatibility, all Exceptions are ignored.
@@ -153,27 +240,84 @@ final class DefaultProxySelectorSystemProxiesAccessor {
     }
 }
 
+@SingletonTraits(access = BuildtimeAccessOnly.class, layeredCallbacks = SingleLayer.class)
 @AutomaticallyRegisteredFeature
 class JavaNetFeature implements InternalFeature {
 
     @Override
     public void duringSetup(DuringSetupAccess access) {
+        ImageSingletons.add(URLProtocolsSupport.class, new URLProtocolsSupport(SubstrateOptions.DisableURLProtocols.getValue().values()));
+
+        LinkedHashSet<String> protocols = new LinkedHashSet<>();
         for (String protocol : SubstrateOptions.EnableURLProtocols.getValue().values()) {
-            try {
-                var clazz = Class.forName("sun.net.www.protocol." + protocol + ".Handler");
-                RuntimeReflection.register(clazz);
-                RuntimeReflection.register(clazz.getConstructor());
-            } catch (ClassNotFoundException | NoSuchMethodException | LinkageError e) {
-                LogUtils.warning("Registering the " + protocol + " URL protocol failed. This protocol will not be available at runtime. The protocol was set with " +
-                                SubstrateOptionsParser.commandArgument(SubstrateOptions.EnableURLProtocols, protocol) +
-                                "Cause of the failure: " + e.getMessage());
+            if (JavaNetSubstitutions.isAllURLProtocolsOption(protocol) || JavaNetSubstitutions.isRuntimeURLProtocolsOption(protocol)) {
+                protocols.addAll(JavaNetSubstitutions.KNOWN_JDK_PROTOCOLS);
+            } else {
+                protocols.add(protocol);
             }
+        }
+        for (String protocol : protocols) {
+            JavaNetSubstitutions.registerURLProtocol(protocol);
         }
 
         RuntimeResourceSupport.singleton().addResources(AccessCondition.typeReached(URL.class), "META-INF/services/java.net.spi.URLStreamHandlerProvider", "JavaNetFeature for URL");
     }
 }
 
+@SingletonTraits(access = AllAccess.class, layeredCallbacks = SingleLayer.class, layeredInstallationKind = InitialLayerOnly.class)
+final class URLProtocolsSupport {
+    private final Set<String> disabledProtocols;
+
+    URLProtocolsSupport(Collection<String> disabledProtocols) {
+        this.disabledProtocols = Set.copyOf(disabledProtocols);
+    }
+
+    boolean isDisabled(String protocol) {
+        return disabledProtocols.contains(protocol);
+    }
+}
+
 /** Dummy class to have a class with the file's name. */
 public final class JavaNetSubstitutions {
+    static final String ALL_PROTOCOLS = "all";
+    static final String RUNTIME_PROTOCOLS = "runtime";
+    static final Set<String> KNOWN_JDK_PROTOCOLS = Set.of("mailto", "jmod", "jrt", "ftp", "http", "https", "jar");
+
+    static boolean isAllURLProtocolsOption(String protocol) {
+        return ALL_PROTOCOLS.equals(protocol);
+    }
+
+    static boolean isRuntimeURLProtocolsOption(String protocol) {
+        return RUNTIME_PROTOCOLS.equals(protocol);
+    }
+
+    static boolean isDisabledURLProtocol(String protocol) {
+        return ImageSingletons.contains(URLProtocolsSupport.class) && ImageSingletons.lookup(URLProtocolsSupport.class).isDisabled(protocol);
+    }
+
+    static void registerURLProtocol(String protocol) {
+        if (isDisabledURLProtocol(protocol)) {
+            LogUtils.warning("The URL protocol " + protocol + " was both enabled and disabled. The disable option takes precedence.");
+            return;
+        }
+        try {
+            var clazz = Class.forName("sun.net.www.protocol." + protocol + ".Handler");
+            RuntimeReflection.register(clazz);
+            RuntimeReflection.register(clazz.getConstructor());
+        } catch (ClassNotFoundException | NoSuchMethodException | LinkageError e) {
+            LogUtils.warning("Registering the " + protocol + " URL protocol failed. This protocol will not be available at runtime. The protocol was set with " +
+                            SubstrateOptionsParser.commandArgument(SubstrateOptions.EnableURLProtocols, protocol) +
+                            "Cause of the failure: " + e.getMessage());
+        }
+    }
+
+    static void unsupported(String protocol, String handlerClassName) {
+        throw sneakyThrow(new MalformedURLException("Accessing a URL protocol that was not enabled. The URL protocol " + protocol +
+                        " is supported but not enabled by default. It must be enabled by adding the " + handlerClassName + " to reachability metadata."));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T extends Throwable> RuntimeException sneakyThrow(Throwable ex) throws T {
+        throw (T) ex;
+    }
 }

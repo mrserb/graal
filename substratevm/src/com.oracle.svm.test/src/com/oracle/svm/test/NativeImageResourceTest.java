@@ -118,6 +118,25 @@ public class NativeImageResourceTest {
     }
 
     @Test
+    public void classGetResourceBypassesUserURLHandlers() throws IOException {
+        String oldHandlerPackages = System.getProperty("java.protocol.handler.pkgs");
+        try {
+            System.setProperty("java.protocol.handler.pkgs", oldHandlerPackages == null || oldHandlerPackages.isEmpty()
+                            ? "com.oracle.svm.test.protocol"
+                            : oldHandlerPackages + "|com.oracle.svm.test.protocol");
+            try (InputStream in = resourceNameToURL(RESOURCE_FILE_1, true).openStream()) {
+                Assert.assertNotEquals(-1, in.read());
+            }
+        } finally {
+            if (oldHandlerPackages == null) {
+                System.clearProperty("java.protocol.handler.pkgs");
+            } else {
+                System.setProperty("java.protocol.handler.pkgs", oldHandlerPackages);
+            }
+        }
+    }
+
+    @Test
     public void runtimeClassPathResource() throws IOException {
         if (!Boolean.getBoolean("svm.test.expectRuntimeClassPathResource")) {
             return;

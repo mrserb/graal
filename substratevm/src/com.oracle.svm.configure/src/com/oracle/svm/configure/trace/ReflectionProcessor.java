@@ -255,11 +255,13 @@ class ReflectionProcessor extends AbstractProcessor {
                 configuration.getOrCreateType(condition, clazz).setUnsafeAllocated();
                 break;
             }
-            case "createURLStreamHandler":
-                configuration.getOrCreateType(condition, clazz)
+            case "createURLStreamHandler": {
+                ConfigurationTypeDescriptor handlerClass = descriptorForClass(singleElement(args));
+                configuration.getOrCreateType(condition, handlerClass)
                                 .addMethod(ConfigurationMethod.CONSTRUCTOR_NAME, "()V", ConfigurationMemberDeclaration.DECLARED,
                                                 ConfigurationMemberAccessibility.ACCESSED);
                 break;
+            }
             default:
                 // Checkstyle: allow System.err (agent class)
                 System.err.println("Unsupported reflection method: " + function);

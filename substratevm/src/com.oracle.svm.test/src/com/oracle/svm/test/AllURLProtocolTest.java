@@ -24,28 +24,16 @@
  */
 package com.oracle.svm.test;
 
-import java.net.MalformedURLException;
 import java.net.URI;
 
-import org.junit.Assert;
 import org.junit.Test;
 
-@NativeImageBuildArgs({
-                "-H:+UnlockExperimentalVMOptions",
-                "-H:+RuntimeClassLoading",
-                "--enable-url-protocols=runtime",
-                "-H:DisableURLProtocols=http"
-})
-public class RuntimeURLProtocolDisableTest {
+@NativeImageBuildArgs("--enable-url-protocols=all")
+public class AllURLProtocolTest {
 
     @Test
-    public void disabledProtocolIsNotResolvedByRuntimeURLFallback() {
-        MalformedURLException exception = Assert.assertThrows(MalformedURLException.class, () -> URI.create("http://example.com").toURL());
-        Assert.assertTrue(exception.getMessage(), exception.getMessage().contains("unknown protocol: http"));
-    }
-
-    @Test
-    public void runtimeModeEnablesJDKProtocols() throws Exception {
+    public void allModeEnablesKnownJDKProtocols() throws Exception {
+        URI.create("http://example.com").toURL();
         URI.create("jar:file:/tmp/missing.jar!/resource.txt").toURL();
     }
 }

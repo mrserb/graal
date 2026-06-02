@@ -2800,6 +2800,7 @@ suite = {
             "SVM",
             "SVM_CONFIGURE",
           ],
+          "unittestConfig" : "svm-unittest",
           "testDistribution" : True,
         },
 

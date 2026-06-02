@@ -31,6 +31,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.net.URLConnection;
+import java.net.URLStreamHandler;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -111,6 +113,12 @@ public final class Resources {
     private static final String RESOURCE_KEYS = "resourceKeys";
     private static final String RESOURCE_REGISTRATION_STATES = "resourceRegistrationStates";
     private static final String PATTERNS = "patterns";
+    private static final URLStreamHandler RESOURCE_URL_STREAM_HANDLER = new URLStreamHandler() {
+        @Override
+        protected URLConnection openConnection(URL url) {
+            return new ResourceURLConnection(url);
+        }
+    };
 
     @Platforms(Platform.HOSTED_ONLY.class) //
     private SymbolEncoder encoder;
@@ -865,7 +873,7 @@ public final class Resources {
                 host = moduleName(module);
             }
             String authority = host != null ? "//" + (userInfo != null ? userInfo + '@' : "") + host : "";
-            return new URL(RESOURCE_PROTOCOL + ':' + authority + '/' + resourceName + refPart);
+            return new URL(null, RESOURCE_PROTOCOL + ':' + authority + '/' + resourceName + refPart, RESOURCE_URL_STREAM_HANDLER);
         } catch (MalformedURLException ex) {
             throw new IllegalStateException(ex);
         }

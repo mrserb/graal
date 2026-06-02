@@ -747,6 +747,11 @@ def _compute_native_unittest_args(extra_build_args=None, include_svm_test_featur
         with open(join(simple_dir, f'simple-resource{i}.txt'), 'w', encoding='utf-8') as out:
             out.write(f"Simple file{i}\n")
 
+    # This trace-processor test uses reflective access to SVM_CONFIGURE internals so that the JVM
+    # unit-test path can apply test-local module exports lazily. Native unit tests cannot apply the
+    # same late exports and would also need extra reflection metadata for the test plumbing.
+    mx_unittest.add_global_ignore_glob('com.oracle.svm.configure.test.config.URLProtocolTraceProcessorTest')
+
     # Always add our extra classpath entry with resources
     additional_build_args += svm_experimental_options([
         '-cp', cp_entry_name

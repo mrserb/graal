@@ -36,7 +36,8 @@ import java.util.Set;
 
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.dynamicaccess.AccessCondition;
-import org.graalvm.nativeimage.hosted.RuntimeReflection;
+import org.graalvm.nativeimage.hosted.Feature.DuringSetupAccess;
+import org.graalvm.nativeimage.impl.RuntimeReflectionSupport;
 import org.graalvm.nativeimage.impl.RuntimeResourceSupport;
 import org.graalvm.word.LocationIdentity;
 import org.graalvm.word.Pointer;
@@ -51,6 +52,7 @@ import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
 import com.oracle.svm.core.feature.InternalFeature;
+import com.oracle.svm.core.imagelayer.ImageLayerBuildingSupport;
 import com.oracle.svm.core.jdk.resources.ResourceURLConnection;
 import com.oracle.svm.guest.staging.c.CGlobalData;
 import com.oracle.svm.guest.staging.c.CGlobalDataFactory;
@@ -58,6 +60,7 @@ import com.oracle.svm.shared.feature.AutomaticallyRegisteredFeature;
 import com.oracle.svm.shared.option.SubstrateOptionsParser;
 import com.oracle.svm.shared.singletons.traits.BuiltinTraits.AllAccess;
 import com.oracle.svm.shared.singletons.traits.BuiltinTraits.BuildtimeAccessOnly;
+import com.oracle.svm.shared.singletons.traits.BuiltinTraits.NoLayeredCallbacks;
 import com.oracle.svm.shared.singletons.traits.BuiltinTraits.SingleLayer;
 import com.oracle.svm.shared.singletons.traits.SingletonLayeredInstallationKind.InitialLayerOnly;
 import com.oracle.svm.shared.singletons.traits.SingletonTraits;
@@ -159,9 +162,6 @@ final class Target_java_net_URL {
      */
     @BasedOnJDKClass(className = "java.net.URL$DefaultFactory")
     private static final class DefaultFactory implements URLStreamHandlerFactory {
-        private static final String PROTOCOL_QUALIFIER = "sun.net.www.protocol.";
-        private static final Set<String> REFLECTIVELY_ACCESSED_PROTOCOLS = Set.of("mailto", "jmod", "jrt", "ftp", "http", "https", "jar");
-
         @Override
         public URLStreamHandler createURLStreamHandler(String protocol) {
             if (JavaNetSubstitutions.isDisabledURLProtocol(protocol)) {
@@ -179,12 +179,12 @@ final class Target_java_net_URL {
                         }
                     };
             }
-            String name = PROTOCOL_QUALIFIER + protocol + ".Handler";
+            String name = JavaNetSubstitutions.handlerClassName(protocol);
             try {
-                Object handler = Class.forName(name).getDeclaredConstructor().newInstance();
+                Object handler = Class.forName(name, false, ClassLoader.getSystemClassLoader()).getDeclaredConstructor().newInstance();
                 return (URLStreamHandler) handler;
             } catch (ClassNotFoundException e) {
-                if (REFLECTIVELY_ACCESSED_PROTOCOLS.contains(protocol)) {
+                if (JavaNetSubstitutions.KNOWN_JDK_PROTOCOLS.contains(protocol)) {
                     JavaNetSubstitutions.unsupported(protocol, name);
                 }
             } catch (Exception e) {
@@ -240,13 +240,15 @@ final class DefaultProxySelectorSystemProxiesAccessor {
     }
 }
 
-@SingletonTraits(access = BuildtimeAccessOnly.class, layeredCallbacks = SingleLayer.class)
+@SingletonTraits(access = BuildtimeAccessOnly.class, layeredCallbacks = NoLayeredCallbacks.class)
 @AutomaticallyRegisteredFeature
 class JavaNetFeature implements InternalFeature {
 
     @Override
     public void duringSetup(DuringSetupAccess access) {
-        ImageSingletons.add(URLProtocolsSupport.class, new URLProtocolsSupport(SubstrateOptions.DisableURLProtocols.getValue().values()));
+        if (ImageLayerBuildingSupport.firstImageBuild()) {
+            ImageSingletons.add(URLProtocolsSupport.class, new URLProtocolsSupport(SubstrateOptions.DisableURLProtocols.getValue().values()));
+        }
 
         LinkedHashSet<String> protocols = new LinkedHashSet<>();
         for (String protocol : SubstrateOptions.EnableURLProtocols.getValue().values()) {
@@ -257,7 +259,7 @@ class JavaNetFeature implements InternalFeature {
             }
         }
         for (String protocol : protocols) {
-            JavaNetSubstitutions.registerURLProtocol(protocol);
+            JavaNetSubstitutions.registerURLProtocol(access, protocol);
         }
 
         RuntimeResourceSupport.singleton().addResources(AccessCondition.typeReached(URL.class), "META-INF/services/java.net.spi.URLStreamHandlerProvider", "JavaNetFeature for URL");
@@ -281,6 +283,7 @@ final class URLProtocolsSupport {
 public final class JavaNetSubstitutions {
     static final String ALL_PROTOCOLS = "all";
     static final String RUNTIME_PROTOCOLS = "runtime";
+    private static final String PROTOCOL_QUALIFIER = "sun.net.www.protocol.";
     static final Set<String> KNOWN_JDK_PROTOCOLS = Set.of("mailto", "jmod", "jrt", "ftp", "http", "https", "jar");
 
     static boolean isAllURLProtocolsOption(String protocol) {
@@ -295,15 +298,24 @@ public final class JavaNetSubstitutions {
         return ImageSingletons.contains(URLProtocolsSupport.class) && ImageSingletons.lookup(URLProtocolsSupport.class).isDisabled(protocol);
     }
 
-    static void registerURLProtocol(String protocol) {
+    static String handlerClassName(String protocol) {
+        return PROTOCOL_QUALIFIER + protocol + ".Handler";
+    }
+
+    static void registerURLProtocol(DuringSetupAccess access, String protocol) {
         if (isDisabledURLProtocol(protocol)) {
             LogUtils.warning("The URL protocol " + protocol + " was both enabled and disabled. The disable option takes precedence.");
             return;
         }
+        String handlerClassName = handlerClassName(protocol);
         try {
-            var clazz = Class.forName("sun.net.www.protocol." + protocol + ".Handler");
-            RuntimeReflection.register(clazz);
-            RuntimeReflection.register(clazz.getConstructor());
+            Class<?> clazz = access.findClassByName(handlerClassName);
+            if (clazz == null) {
+                throw new ClassNotFoundException(handlerClassName);
+            }
+            RuntimeReflectionSupport reflectionSupport = ImageSingletons.lookup(RuntimeReflectionSupport.class);
+            reflectionSupport.register(AccessCondition.unconditional(), clazz);
+            reflectionSupport.register(AccessCondition.unconditional(), false, clazz.getConstructor());
         } catch (ClassNotFoundException | NoSuchMethodException | LinkageError e) {
             LogUtils.warning("Registering the " + protocol + " URL protocol failed. This protocol will not be available at runtime. The protocol was set with " +
                             SubstrateOptionsParser.commandArgument(SubstrateOptions.EnableURLProtocols, protocol) +

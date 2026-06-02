@@ -67,7 +67,7 @@ public class URLProtocolTraceProcessorTest {
     }
 
     @Test
-    public void appClassPathResourceURLDoesNotRegisterJarHandlerConstructor() throws Exception {
+    public void appClassPathResourceURLRegistersCachedJarHandlerConstructor() throws Exception {
         Class<?> configurationSetClass = Class.forName("com.oracle.svm.configure.config.ConfigurationSet");
         Object configurationSet = configurationSetClass.getConstructor().newInstance();
         Object processor = newTraceProcessor();
@@ -109,11 +109,11 @@ public class URLProtocolTraceProcessorTest {
                         """.formatted(JAR_HANDLER)), configurationSet);
 
         Object reflectionConfiguration = configurationSetClass.getMethod("getReflectionConfiguration").invoke(configurationSet);
-        Assert.assertNull(getConfigurationType(reflectionConfiguration, JAR_HANDLER));
+        Assert.assertNotNull(getConfigurationType(reflectionConfiguration, JAR_HANDLER));
     }
 
     @Test
-    public void appClassPathResourceEnumerationURLDoesNotRegisterJarHandlerConstructor() throws Exception {
+    public void appClassPathResourceEnumerationURLRegistersCachedJarHandlerConstructor() throws Exception {
         Class<?> configurationSetClass = Class.forName("com.oracle.svm.configure.config.ConfigurationSet");
         Object configurationSet = configurationSetClass.getConstructor().newInstance();
         Object processor = newTraceProcessor();
@@ -147,7 +147,7 @@ public class URLProtocolTraceProcessorTest {
                         """.formatted(JAR_HANDLER)), configurationSet);
 
         Object reflectionConfiguration = configurationSetClass.getMethod("getReflectionConfiguration").invoke(configurationSet);
-        Assert.assertNull(getConfigurationType(reflectionConfiguration, JAR_HANDLER));
+        Assert.assertNotNull(getConfigurationType(reflectionConfiguration, JAR_HANDLER));
     }
 
     @Test

@@ -118,13 +118,19 @@ public class NativeImageResourceTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void classGetResourceBypassesUserURLHandlers() throws IOException {
         String oldHandlerPackages = System.getProperty("java.protocol.handler.pkgs");
         try {
             System.setProperty("java.protocol.handler.pkgs", oldHandlerPackages == null || oldHandlerPackages.isEmpty()
                             ? "com.oracle.svm.test.protocol"
                             : oldHandlerPackages + "|com.oracle.svm.test.protocol");
-            try (InputStream in = resourceNameToURL(RESOURCE_FILE_1, true).openStream()) {
+            URL resourceURL = resourceNameToURL(RESOURCE_FILE_1, true);
+            try (InputStream in = resourceURL.openStream()) {
+                Assert.assertNotEquals(-1, in.read());
+            }
+            URL reparsedResourceURL = new URL(resourceURL.toExternalForm());
+            try (InputStream in = reparsedResourceURL.openStream()) {
                 Assert.assertNotEquals(-1, in.read());
             }
         } finally {

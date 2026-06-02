@@ -119,7 +119,7 @@ final class Target_java_net_URL {
 
         boolean checkedWithFactory = false;
         URLStreamHandlerFactory currentFactory;
-        boolean overrideable = isOverrideable(protocol);
+        boolean overrideable = isOverrideable(protocol) && !isResourceProtocol(protocol);
         if (overrideable && Target_jdk_internal_misc_VM.isBooted()) {
             currentFactory = factory;
             if (currentFactory != null) {
@@ -158,6 +158,10 @@ final class Target_java_net_URL {
         }
 
         return handler;
+    }
+
+    private static boolean isResourceProtocol(String protocol) {
+        return "resource".equalsIgnoreCase(protocol);
     }
 
     /**

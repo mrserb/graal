@@ -48,8 +48,14 @@ import jdk.graal.compiler.phases.common.LazyValue;
 import jdk.vm.ci.meta.MetaUtil;
 
 class ReflectionProcessor extends AbstractProcessor {
+    private static final String APP_CLASS_LOADER = "jdk.internal.loader.ClassLoaders$AppClassLoader";
+    private static final String JAR_FILE = "java.util.jar.JarFile";
+    private static final String JAR_URL_HANDLER = "sun.net.www.protocol.jar.Handler";
+
     private final AccessAdvisor advisor;
     private boolean trackReflectionMetadata = true;
+    private String appClassLoaderResourceLookup;
+    private boolean suppressNextJarURLHandler;
 
     ReflectionProcessor(AccessAdvisor advisor) {
         this.advisor = advisor;
@@ -70,6 +76,13 @@ class ReflectionProcessor extends AbstractProcessor {
 
         String function = (String) entry.get("function");
         List<?> args = (List<?>) entry.get("args");
+        boolean jarURLHandlerLookup = isURLStreamHandlerLookup(function, args, JAR_URL_HANDLER);
+        if (appClassLoaderResourceLookup != null && !jarURLHandlerLookup && !isResourceLookup(function)) {
+            appClassLoaderResourceLookup = null;
+        }
+        if (suppressNextJarURLHandler && !jarURLHandlerLookup && !isResourceLookup(function)) {
+            suppressNextJarURLHandler = false;
+        }
         ResourceConfiguration resourceConfiguration = configurationSet.getResourceConfiguration();
         switch (function) {
             // These are called via java.lang.Class or via the class loader hierarchy, so we would
@@ -85,6 +98,7 @@ class ReflectionProcessor extends AbstractProcessor {
             }
             case "getResource", "getSystemResource", "getSystemResourceAsStream", "getResources", "getSystemResources", "getEntry" -> {
                 String literal = singleElement(args);
+                trackAppClassLoaderResourceURL(function, entry, literal);
                 if (!advisor.shouldIgnoreResourceLookup(lazyValue(literal), entry)) {
                     resourceConfiguration.addGlobPattern(condition, literal, null);
                 }
@@ -256,6 +270,11 @@ class ReflectionProcessor extends AbstractProcessor {
                 break;
             }
             case "createURLStreamHandler": {
+                if (jarURLHandlerLookup && shouldSuppressJarURLHandler()) {
+                    suppressNextJarURLHandler = false;
+                    appClassLoaderResourceLookup = null;
+                    return;
+                }
                 ConfigurationTypeDescriptor handlerClass = descriptorForClass(singleElement(args));
                 configuration.getOrCreateType(condition, handlerClass)
                                 .addMethod(ConfigurationMethod.CONSTRUCTOR_NAME, "()V", ConfigurationMemberDeclaration.DECLARED,
@@ -267,6 +286,71 @@ class ReflectionProcessor extends AbstractProcessor {
                 System.err.println("Unsupported reflection method: " + function);
                 // Checkstyle: disallow System.err
         }
+    }
+
+    private void trackAppClassLoaderResourceURL(String function, EconomicMap<String, Object> entry, String resourceName) {
+        if (resourceName == null) {
+            return;
+        }
+        if (entryClassEquals(entry, APP_CLASS_LOADER) && isClassLoaderResourceLookup(function)) {
+            appClassLoaderResourceLookup = resourceName;
+            return;
+        }
+        if (!"getEntry".equals(function) || !entryClassEquals(entry, JAR_FILE)) {
+            return;
+        }
+        /*
+         * The agent reports java.net.URL$DefaultFactory.createURLStreamHandler("jar") because
+         * HotSpot materializes application-classpath resources as jar:file:<classpath-jar>!/...
+         * URLs. Re-parsing such a resource URL's external form therefore looks like real JAR URL
+         * protocol use during the agented JVM run. Native Image embeds the same resource and serves
+         * it through the resource: protocol, so registering sun.net.www.protocol.jar.Handler for
+         * this path is only a classpath artifact and pulls in the large JAR/security URL stack.
+         *
+         * The preceding JarFile.getEntry event is already emitted by the agent only for non-META-INF
+         * resources read from application class-path entries. We still require a matching
+         * AppClassLoader resource lookup before this class-path JarFile access and only suppress a
+         * following jar handler event while the trace is still in the resource lookup sequence. Any
+         * intervening non-resource reflection event clears the suppression, so an explicit later
+         * jar: URL remains recorded. META-INF entries are ignored by the agent's JarFile.getEntry
+         * breakpoint, so shouldSuppressJarURLHandler also allows the direct AppClassLoader lookup
+         * signal for META-INF resources to suppress a handler lookup that immediately follows
+         * resource enumeration.
+         */
+        if (resourceName.equals(appClassLoaderResourceLookup)) {
+            suppressNextJarURLHandler = true;
+        }
+    }
+
+    private boolean shouldSuppressJarURLHandler() {
+        return suppressNextJarURLHandler || isMetaInfResource(appClassLoaderResourceLookup);
+    }
+
+    private static boolean isURLStreamHandlerLookup(String function, List<?> args, String handlerClass) {
+        return "createURLStreamHandler".equals(function) && args != null && args.size() == 1 && handlerClass.equals(args.get(0));
+    }
+
+    private static boolean isMetaInfResource(String resourceName) {
+        return resourceName != null && resourceName.startsWith("META-INF");
+    }
+
+    private static boolean isResourceLookup(String function) {
+        return switch (function) {
+            case "findResource", "findResourceAsStream", "getResource", "getSystemResource",
+                            "getSystemResourceAsStream", "getResources", "getSystemResources", "getEntry" -> true;
+            default -> false;
+        };
+    }
+
+    private static boolean isClassLoaderResourceLookup(String function) {
+        return switch (function) {
+            case "getResource", "getResources", "getSystemResource", "getSystemResourceAsStream", "getSystemResources" -> true;
+            default -> false;
+        };
+    }
+
+    private static boolean entryClassEquals(EconomicMap<String, Object> entry, String className) {
+        return className.equals(entry.get("class"));
     }
 
     private static void addFullyQualifiedDeclaredMethod(String descriptor, TypeConfiguration configuration) {

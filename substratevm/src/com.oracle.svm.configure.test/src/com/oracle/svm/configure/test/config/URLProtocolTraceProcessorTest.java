@@ -35,6 +35,7 @@ import com.oracle.svm.configure.test.AddExports;
 @AddExports({"org.graalvm.nativeimage/org.graalvm.nativeimage.impl", "jdk.graal.compiler/jdk.graal.compiler.phases.common", "jdk.graal.compiler/jdk.graal.compiler.util",
                 "jdk.graal.compiler/jdk.graal.compiler.util.json", "jdk.internal.vm.ci/jdk.vm.ci.meta"})
 public class URLProtocolTraceProcessorTest {
+    private static final String JAR_HANDLER = "sun.net.www.protocol.jar.Handler";
 
     @Test
     public void createURLStreamHandlerRegistersHandlerConstructor() throws Exception {
@@ -49,13 +50,13 @@ public class URLProtocolTraceProcessorTest {
                             "function": "createURLStreamHandler",
                             "class": "java.net.URL$DefaultFactory",
                             "caller_class": "com.example.UrlAgentRepro",
-                            "args": ["sun.net.www.protocol.jar.Handler"]
+                            "args": ["%s"]
                           }
                         ]
-                        """), configurationSet);
+                        """.formatted(JAR_HANDLER)), configurationSet);
 
         Object reflectionConfiguration = configurationSetClass.getMethod("getReflectionConfiguration").invoke(configurationSet);
-        Object handlerType = getConfigurationType(reflectionConfiguration, "sun.net.www.protocol.jar.Handler");
+        Object handlerType = getConfigurationType(reflectionConfiguration, JAR_HANDLER);
         Assert.assertNotNull(handlerType);
         Object constructorInfo = getConstructorInfo(handlerType);
         Assert.assertEquals("DECLARED", constructorInfo.getClass().getMethod("getDeclaration").invoke(constructorInfo).toString());
@@ -63,6 +64,173 @@ public class URLProtocolTraceProcessorTest {
 
         Object factoryType = getConfigurationType(reflectionConfiguration, "java.net.URL$DefaultFactory");
         Assert.assertNull(factoryType);
+    }
+
+    @Test
+    public void appClassPathResourceURLDoesNotRegisterJarHandlerConstructor() throws Exception {
+        Class<?> configurationSetClass = Class.forName("com.oracle.svm.configure.config.ConfigurationSet");
+        Object configurationSet = configurationSetClass.getConstructor().newInstance();
+        Object processor = newTraceProcessor();
+
+        processor.getClass().getMethod("process", Reader.class, configurationSetClass).invoke(processor, new StringReader("""
+                        [
+                          {
+                            "tracer": "reflect",
+                            "function": "getResource",
+                            "class": "jdk.internal.loader.ClassLoaders$AppClassLoader",
+                            "caller_class": "java.lang.Class",
+                            "result": true,
+                            "args": ["probe.txt"]
+                          },
+                          {
+                            "tracer": "reflect",
+                            "function": "getResource",
+                            "class": "jdk.internal.loader.ClassLoaders$PlatformClassLoader",
+                            "caller_class": "java.lang.ClassLoader",
+                            "result": true,
+                            "args": ["probe.txt"]
+                          },
+                          {
+                            "tracer": "reflect",
+                            "function": "getEntry",
+                            "class": "java.util.jar.JarFile",
+                            "caller_class": "java.util.jar.JarFile",
+                            "result": true,
+                            "args": ["probe.txt"]
+                          },
+                          {
+                            "tracer": "reflect",
+                            "function": "createURLStreamHandler",
+                            "class": "java.net.URL$DefaultFactory",
+                            "caller_class": "java.net.URL",
+                            "args": ["%s"]
+                          }
+                        ]
+                        """.formatted(JAR_HANDLER)), configurationSet);
+
+        Object reflectionConfiguration = configurationSetClass.getMethod("getReflectionConfiguration").invoke(configurationSet);
+        Assert.assertNull(getConfigurationType(reflectionConfiguration, JAR_HANDLER));
+    }
+
+    @Test
+    public void appClassPathResourceEnumerationURLDoesNotRegisterJarHandlerConstructor() throws Exception {
+        Class<?> configurationSetClass = Class.forName("com.oracle.svm.configure.config.ConfigurationSet");
+        Object configurationSet = configurationSetClass.getConstructor().newInstance();
+        Object processor = newTraceProcessor();
+
+        processor.getClass().getMethod("process", Reader.class, configurationSetClass).invoke(processor, new StringReader("""
+                        [
+                          {
+                            "tracer": "reflect",
+                            "function": "getResources",
+                            "class": "jdk.internal.loader.ClassLoaders$AppClassLoader",
+                            "caller_class": "java.lang.ClassLoader",
+                            "result": true,
+                            "args": ["META-INF/MANIFEST.MF"]
+                          },
+                          {
+                            "tracer": "reflect",
+                            "function": "getResources",
+                            "class": "jdk.internal.loader.ClassLoaders$PlatformClassLoader",
+                            "caller_class": "java.lang.ClassLoader",
+                            "result": true,
+                            "args": ["META-INF/MANIFEST.MF"]
+                          },
+                          {
+                            "tracer": "reflect",
+                            "function": "createURLStreamHandler",
+                            "class": "java.net.URL$DefaultFactory",
+                            "caller_class": "java.net.URL",
+                            "args": ["%s"]
+                          }
+                        ]
+                        """.formatted(JAR_HANDLER)), configurationSet);
+
+        Object reflectionConfiguration = configurationSetClass.getMethod("getReflectionConfiguration").invoke(configurationSet);
+        Assert.assertNull(getConfigurationType(reflectionConfiguration, JAR_HANDLER));
+    }
+
+    @Test
+    public void appClassPathResourceURLWithoutClasspathJarAccessDoesNotHideExplicitJarURL() throws Exception {
+        Class<?> configurationSetClass = Class.forName("com.oracle.svm.configure.config.ConfigurationSet");
+        Object configurationSet = configurationSetClass.getConstructor().newInstance();
+        Object processor = newTraceProcessor();
+
+        processor.getClass().getMethod("process", Reader.class, configurationSetClass).invoke(processor, new StringReader("""
+                        [
+                          {
+                            "tracer": "reflect",
+                            "function": "getResource",
+                            "class": "jdk.internal.loader.ClassLoaders$AppClassLoader",
+                            "caller_class": "java.lang.Class",
+                            "result": true,
+                            "args": ["probe.txt"]
+                          },
+                          {
+                            "tracer": "reflect",
+                            "function": "getResource",
+                            "class": "jdk.internal.loader.ClassLoaders$PlatformClassLoader",
+                            "caller_class": "java.lang.ClassLoader",
+                            "result": true,
+                            "args": ["probe.txt"]
+                          },
+                          {
+                            "tracer": "reflect",
+                            "function": "createURLStreamHandler",
+                            "class": "java.net.URL$DefaultFactory",
+                            "caller_class": "java.net.URL",
+                            "args": ["%s"]
+                          }
+                        ]
+                        """.formatted(JAR_HANDLER)), configurationSet);
+
+        Object reflectionConfiguration = configurationSetClass.getMethod("getReflectionConfiguration").invoke(configurationSet);
+        Assert.assertNotNull(getConfigurationType(reflectionConfiguration, JAR_HANDLER));
+    }
+
+    @Test
+    public void appClassPathResourceURLDoesNotHideLaterExplicitJarURL() throws Exception {
+        Class<?> configurationSetClass = Class.forName("com.oracle.svm.configure.config.ConfigurationSet");
+        Object configurationSet = configurationSetClass.getConstructor().newInstance();
+        Object processor = newTraceProcessor();
+
+        processor.getClass().getMethod("process", Reader.class, configurationSetClass).invoke(processor, new StringReader("""
+                        [
+                          {
+                            "tracer": "reflect",
+                            "function": "getResource",
+                            "class": "jdk.internal.loader.ClassLoaders$AppClassLoader",
+                            "caller_class": "java.lang.Class",
+                            "result": true,
+                            "args": ["probe.txt"]
+                          },
+                          {
+                            "tracer": "reflect",
+                            "function": "getEntry",
+                            "class": "java.util.jar.JarFile",
+                            "caller_class": "java.util.jar.JarFile",
+                            "result": true,
+                            "args": ["probe.txt"]
+                          },
+                          {
+                            "tracer": "reflect",
+                            "function": "forName",
+                            "class": "java.lang.Class",
+                            "caller_class": "com.example.UrlAgentRepro",
+                            "args": ["java.lang.String"]
+                          },
+                          {
+                            "tracer": "reflect",
+                            "function": "createURLStreamHandler",
+                            "class": "java.net.URL$DefaultFactory",
+                            "caller_class": "java.net.URL",
+                            "args": ["%s"]
+                          }
+                        ]
+                        """.formatted(JAR_HANDLER)), configurationSet);
+
+        Object reflectionConfiguration = configurationSetClass.getMethod("getReflectionConfiguration").invoke(configurationSet);
+        Assert.assertNotNull(getConfigurationType(reflectionConfiguration, JAR_HANDLER));
     }
 
     private static Object newTraceProcessor() throws Exception {

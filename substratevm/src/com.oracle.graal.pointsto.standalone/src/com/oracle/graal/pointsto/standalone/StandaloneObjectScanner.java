@@ -34,10 +34,8 @@ import com.oracle.graal.pointsto.util.CompletionExecutor;
 /**
  * Standalone {@link ObjectScanner} used during heap verification.
  *
- * Standalone no longer hard-codes any class-initialization gating in the scanner itself. Field
- * availability is decided by the standalone hosted-values and heap-scanner layer, so verification
- * can reuse the normal {@link ObjectScanner} traversal rules while still skipping unavailable
- * static values.
+ * Verification uses normal {@link ObjectScanner} traversal rules while the standalone
+ * hosted-values and heap-scanner layers decide static-field availability.
  */
 public class StandaloneObjectScanner extends ObjectScanner {
 

@@ -25,21 +25,14 @@
 
 package com.oracle.graal.pointsto.standalone.meta;
 
-import java.lang.reflect.Executable;
-import java.lang.reflect.Field;
-
-import com.oracle.graal.pointsto.ObjectScanner;
+import com.oracle.graal.pointsto.heap.AbstractImageHeapSnippetReflectionProvider;
 import com.oracle.graal.pointsto.heap.ImageHeapConstant;
 import com.oracle.graal.pointsto.heap.ImageHeapScanner;
-import com.oracle.svm.shared.util.VMError;
 
 import jdk.graal.compiler.api.replacements.SnippetReflectionProvider;
 import jdk.graal.compiler.word.WordTypes;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaField;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * Standalone equivalent of the hosted snippet reflection provider.
@@ -47,49 +40,23 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  * The provider redirects newly created object constants through the shadow heap so heap scanning
  * and verification keep seeing {@link ImageHeapConstant} wrappers instead of raw hosted constants.
  */
-public final class StandaloneSnippetReflectionProvider implements SnippetReflectionProvider {
-    /**
-     * Shadow-heap access used to wrap newly created object constants. It is installed after both
-     * the snippet reflection provider and the heap scanner have been created.
-     */
-    private ImageHeapScanner heapScanner;
+public final class StandaloneSnippetReflectionProvider extends AbstractImageHeapSnippetReflectionProvider {
     /**
      * Guest-aware snippet reflection implementation supplied by the selected VMAccess backend.
      */
     private final SnippetReflectionProvider original;
-    /**
-     * Exposes {@link WordTypes} for injected node intrinsic parameters used during graph building.
-     */
-    private final WordTypes wordTypes;
 
     /**
      * Creates a standalone snippet reflection provider that keeps object constants shadow-heap
      * aware while delegating guest conversions to the original VMAccess-backed provider.
      */
     public StandaloneSnippetReflectionProvider(ImageHeapScanner heapScanner, SnippetReflectionProvider original, WordTypes wordTypes) {
-        this.heapScanner = heapScanner;
+        super(heapScanner, wordTypes);
         this.original = original;
-        this.wordTypes = wordTypes;
-    }
-
-    /**
-     * Installs the heap scanner after both components have been constructed.
-     */
-    public void setHeapScanner(ImageHeapScanner heapScanner) {
-        this.heapScanner = heapScanner;
     }
 
     @Override
-    public JavaConstant forObject(Object object) {
-        VMError.guarantee(heapScanner != null, "Heap scanner not installed yet.");
-        return heapScanner.createImageHeapConstant(object, ObjectScanner.OtherReason.UNKNOWN);
-    }
-
-    @Override
-    public JavaConstant forBoxed(JavaKind kind, Object value) {
-        if (kind == JavaKind.Object) {
-            return forObject(value);
-        }
+    protected JavaConstant forBoxedPrimitive(JavaKind kind, Object value) {
         return original.forBoxed(kind, value);
     }
 
@@ -98,37 +65,15 @@ public final class StandaloneSnippetReflectionProvider implements SnippetReflect
      * and then delegating the actual guest-to-host conversion to the VMAccess-backed provider.
      */
     @Override
-    public <T> T asObject(Class<T> type, JavaConstant constant) {
-        JavaConstant unwrapped = constant;
-        if (constant instanceof ImageHeapConstant imageHeapConstant) {
-            unwrapped = imageHeapConstant.getHostedObject();
-            if (unwrapped == null) {
-                return null;
-            }
-        }
-        return original.asObject(type, unwrapped);
+    protected <T> T asObjectFromUnwrapped(Class<T> type, JavaConstant constant) {
+        return original.asObject(type, constant);
     }
 
     @Override
     public <T> T getInjectedNodeIntrinsicParameter(Class<T> type) {
         if (type.equals(WordTypes.class)) {
-            return type.cast(wordTypes);
+            return type.cast(getWordTypes());
         }
         return original.getInjectedNodeIntrinsicParameter(type);
-    }
-
-    @Override
-    public Class<?> originalClass(ResolvedJavaType type) {
-        throw VMError.intentionallyUnimplemented(); // ExcludeFromJacocoGeneratedReport
-    }
-
-    @Override
-    public Executable originalMethod(ResolvedJavaMethod method) {
-        throw VMError.intentionallyUnimplemented(); // ExcludeFromJacocoGeneratedReport
-    }
-
-    @Override
-    public Field originalField(ResolvedJavaField field) {
-        throw VMError.intentionallyUnimplemented(); // ExcludeFromJacocoGeneratedReport
     }
 }

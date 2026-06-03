@@ -30,9 +30,11 @@ For more information describing how to define and use these options, read the [`
 
 ## Build Options
 
-Run `native-image --print-options` to generate a table of the available options like this one below:
+Run `native-image --print-options` to generate a table of the available options like this one below.
+
 Deprecated URL protocol options such as `--enable-http`, `--enable-https`, and `--enable-url-protocols` are omitted from the generated table.
 Use reachability metadata to register URL protocol handlers instead; see [URL Protocols in Native Image](URLProtocols.md).
+
 <!-- BEGIN: build-options-table -->
 | Command | Type | Description | Default | Usage |
 |---------|------|-------------|---------|-------|

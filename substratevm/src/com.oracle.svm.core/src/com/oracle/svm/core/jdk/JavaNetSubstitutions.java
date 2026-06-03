@@ -24,7 +24,10 @@
  */
 package com.oracle.svm.core.jdk;
 
+import java.io.IOException;
 import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.net.URLStreamHandler;
@@ -95,6 +98,48 @@ final class Target_java_net_URL {
     @Alias //
     private static native boolean isOverrideable(String protocol);
 
+    @Substitute
+    @SuppressWarnings("deprecation")
+    public static URL of(URI uri, URLStreamHandler handler) throws MalformedURLException {
+        if (!uri.isAbsolute()) {
+            throw new IllegalArgumentException("URI is not absolute");
+        }
+
+        String protocol = uri.getScheme();
+        if (handler == null && protocol.equals("jrt") && !uri.isOpaque() && uri.getRawAuthority() == null && uri.getRawFragment() == null) {
+            String query = uri.getRawQuery();
+            String path = uri.getRawPath();
+            String file = query == null ? path : path + "?" + query;
+
+            String host = uri.getHost();
+            if (host == null) {
+                host = "";
+            }
+
+            int port = uri.getPort();
+            URLStreamHandler jrtHandler = JRTSupport.Options.AllowJRTFileSystem.getValue() ? JavaNetSubstitutions.newJRTURLStreamHandler() : null;
+            return new URL("jrt", host, port, file, jrtHandler);
+        }
+
+        if ("url".equalsIgnoreCase(protocol)) {
+            String uristr = uri.toString();
+            try {
+                URI inner = new URI(uristr.substring(4));
+                if (inner.isAbsolute()) {
+                    protocol = inner.getScheme();
+                }
+            } catch (URISyntaxException e) {
+                throw new MalformedURLException(e.getMessage());
+            }
+        }
+
+        if (handler != null && !isOverrideable(protocol)) {
+            throw new IllegalArgumentException("Can't override URLStreamHandler for protocol " + protocol);
+        }
+
+        return new URL((URL) null, uri.toString(), handler);
+    }
+
     @Alias //
     private static native URLStreamHandler lookupViaProviders(String protocol);
 
@@ -110,6 +155,14 @@ final class Target_java_net_URL {
     static URLStreamHandler getURLStreamHandler(String protocol) {
         if (JavaNetSubstitutions.isDisabledURLProtocol(protocol)) {
             return null;
+        }
+
+        if ("jrt".equalsIgnoreCase(protocol) && JRTSupport.Options.AllowJRTFileSystem.getValue()) {
+            URLStreamHandler handler = JavaNetSubstitutions.newJRTURLStreamHandler();
+            synchronized (streamHandlerLock) {
+                handlers.put("jrt", handler);
+            }
+            return handler;
         }
 
         URLStreamHandler handler = handlers.get(protocol);
@@ -182,6 +235,11 @@ final class Target_java_net_URL {
                             return new ResourceURLConnection(url);
                         }
                     };
+                case "jrt":
+                    if (JRTSupport.Options.AllowJRTFileSystem.getValue()) {
+                        return JavaNetSubstitutions.newJRTURLStreamHandler();
+                    }
+                    break;
             }
             String name = JavaNetSubstitutions.handlerClassName(protocol);
             try {
@@ -197,6 +255,7 @@ final class Target_java_net_URL {
             return null;
         }
     }
+
 }
 
 @TargetClass(className = "sun.net.spi.DefaultProxySelector")
@@ -335,5 +394,16 @@ public final class JavaNetSubstitutions {
     @SuppressWarnings("unchecked")
     private static <T extends Throwable> RuntimeException sneakyThrow(Throwable ex) throws T {
         throw (T) ex;
+    }
+
+    static URLStreamHandler newJRTURLStreamHandler() {
+        return new JRTURLStreamHandler();
+    }
+
+    private static final class JRTURLStreamHandler extends URLStreamHandler {
+        @Override
+        protected URLConnection openConnection(URL url) throws IOException {
+            return new JRTURLConnection(url);
+        }
     }
 }

@@ -24,12 +24,23 @@
  */
 package com.oracle.svm.test;
 
+import java.io.InputStream;
 import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
+import org.graalvm.nativeimage.ImageInfo;
+import org.junit.Assert;
 import org.junit.Test;
 
-@NativeImageBuildArgs("--enable-url-protocols=all")
+@NativeImageBuildArgs({
+                "-H:+UnlockExperimentalVMOptions",
+                "-H:+AllowJRTFileSystem",
+                "--add-modules=java.xml",
+                "--enable-url-protocols=all"
+})
 public class AllURLProtocolTest {
+    private static final String JDK_CATALOG_RESOURCE = "jdk/xml/internal/jdkcatalog/JDKCatalog.xml";
 
     @Test
     public void allModeEnablesKnownJDKProtocols() throws Exception {
@@ -41,5 +52,28 @@ public class AllURLProtocolTest {
         URI.create("jmod:file:/tmp/missing.jmod!/classes/module-info.class").toURL();
         URI.create("jrt:/java.base").toURL();
         URI.create("mailto:hello@example.com").toURL();
+    }
+
+    @Test
+    public void jrtUsesEmbeddedModuleResourcesWithoutRuntimeModulesImage() throws Exception {
+        if (!ImageInfo.inImageRuntimeCode()) {
+            return;
+        }
+
+        String previousJavaHome = System.getProperty("java.home");
+        Path fakeJavaHome = Files.createTempDirectory("native-image-no-runtime-modules");
+        try {
+            System.setProperty("java.home", fakeJavaHome.toString());
+            try (InputStream stream = URI.create("jrt:/java.xml/" + JDK_CATALOG_RESOURCE).toURL().openStream()) {
+                Assert.assertNotEquals(-1, stream.read());
+            }
+        } finally {
+            if (previousJavaHome == null) {
+                System.clearProperty("java.home");
+            } else {
+                System.setProperty("java.home", previousJavaHome);
+            }
+            Files.deleteIfExists(fakeJavaHome);
+        }
     }
 }

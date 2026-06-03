@@ -3490,26 +3490,6 @@ class StandalonePointstoUnittestsConfig(mx_unittest.MxUnittestConfig):
 mx_unittest.register_unittest_config(StandalonePointstoUnittestsConfig())
 
 
-class SVMUnittestsConfig(mx_unittest.MxUnittestConfig):
-
-    def __init__(self):
-        super().__init__('svm-unittest')
-
-    def apply(self, config):
-        vmArgs, mainClass, mainClassArgs = config
-
-        vmArgs.extend([
-            '--add-exports=jdk.graal.compiler/jdk.graal.compiler.phases.common=ALL-UNNAMED',
-            '--add-exports=jdk.graal.compiler/jdk.graal.compiler.util.json=ALL-UNNAMED',
-            '--add-exports=jdk.internal.vm.ci/jdk.vm.ci.meta=ALL-UNNAMED',
-            '--add-exports=jdk.internal.vm.ci/jdk.vm.ci.meta.annotation=ALL-UNNAMED',
-        ])
-
-        return (vmArgs, mainClass, mainClassArgs)
-
-mx_unittest.register_unittest_config(SVMUnittestsConfig())
-
-
 class SVMDriverUnittestsConfig(mx_unittest.MxUnittestConfig):
 
     def __init__(self):

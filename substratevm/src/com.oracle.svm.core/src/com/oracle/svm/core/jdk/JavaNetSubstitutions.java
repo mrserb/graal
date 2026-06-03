@@ -288,7 +288,8 @@ public final class JavaNetSubstitutions {
     static final String ALL_PROTOCOLS = "all";
     static final String RUNTIME_PROTOCOLS = "runtime";
     private static final String PROTOCOL_QUALIFIER = "sun.net.www.protocol.";
-    static final Set<String> KNOWN_JDK_PROTOCOLS = Set.of("mailto", "jmod", "jrt", "ftp", "http", "https", "jar");
+    static final Set<String> KNOWN_JDK_PROTOCOLS = Set.of(
+                    "file", "ftp", "http", "https", "jar", "jmod", "jrt", "mailto");
 
     static boolean isAllURLProtocolsOption(String protocol) {
         return ALL_PROTOCOLS.equals(protocol);

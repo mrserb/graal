@@ -33,7 +33,13 @@ public class AllURLProtocolTest {
 
     @Test
     public void allModeEnablesKnownJDKProtocols() throws Exception {
+        URI.create("file:/tmp/native-image-url-protocol-test").toURL();
+        URI.create("ftp://example.com/resource.txt").toURL();
         URI.create("http://example.com").toURL();
+        URI.create("https://example.com").toURL();
         URI.create("jar:file:/tmp/missing.jar!/resource.txt").toURL();
+        URI.create("jmod:file:/tmp/missing.jmod!/classes/module-info.class").toURL();
+        URI.create("jrt:/java.base").toURL();
+        URI.create("mailto:hello@example.com").toURL();
     }
 }

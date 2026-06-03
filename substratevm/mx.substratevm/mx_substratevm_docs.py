@@ -231,7 +231,6 @@ def update_build_options_table():
 
     begin_idx = content.find(begin_marker)
     end_idx = content.find(end_marker)
-    new_content = content
 
     if begin_idx == -1 or end_idx == -1:
         # Fallback: try to find existing table and suggest adding markers
@@ -253,6 +252,7 @@ def update_build_options_table():
             new_content = content[:table_start] + new_table + content[table_end:]
         else:
             mx.abort("Could not find table or auto-generation markers in BuildOptions.md")
+            return False
     else:
         # Use marker-based replacement (preferred method)
         mx.log("Found auto-generation markers - using clean replacement")
@@ -262,8 +262,8 @@ def update_build_options_table():
 
         # Replace content between markers
         new_content = (content[:begin_idx + len(begin_marker)] +
-                       '\n' + table_content + '\n' +
-                       content[end_idx:])
+                   '\n' + table_content + '\n' +
+                   content[end_idx:])
 
     # Write updated content
     with open(build_options_file, 'w', encoding='utf-8') as f:

@@ -117,8 +117,7 @@ final class Target_java_net_URL {
             }
 
             int port = uri.getPort();
-            URLStreamHandler jrtHandler = JRTSupport.Options.AllowJRTFileSystem.getValue() ? JavaNetSubstitutions.newJRTURLStreamHandler() : null;
-            return new URL("jrt", host, port, file, jrtHandler);
+            return new URL("jrt", host, port, file, null);
         }
 
         if ("url".equalsIgnoreCase(protocol)) {

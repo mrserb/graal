@@ -40,7 +40,8 @@ import com.oracle.svm.core.jdk.Resources;
 
 @NativeImageBuildArgs({
                 "-H:+UnlockExperimentalVMOptions",
-                "-H:DisableURLProtocols=file,resource,disabled",
+                "-H:+AllowJRTFileSystem",
+                "-H:DisableURLProtocols=file,resource,disabled,jrt",
                 "--features=com.oracle.svm.test.DisabledURLProtocolTest$TestFeature"
 })
 public class DisabledURLProtocolTest {
@@ -53,6 +54,11 @@ public class DisabledURLProtocolTest {
         assertUnknownProtocol("file", () -> URI.create("file:/tmp/native-image-url-disable-test").toURL());
         assertUnknownProtocol("resource", () -> new URL("resource:/native-image-url-disable-test"));
         assertUnknownProtocol("resource", () -> URI.create("resource:/native-image-url-disable-test").toURL());
+    }
+
+    @Test
+    public void disabledJRTProtocolIsRejectedByURIToURLFastPath() {
+        assertUnknownProtocol("jrt", () -> URI.create(opaque("jrt:/java.base/java/lang/Object.class")).toURL());
     }
 
     @Test
@@ -84,6 +90,10 @@ public class DisabledURLProtocolTest {
     private static void assertUnknownProtocol(String protocol, URLAction action) {
         MalformedURLException exception = Assert.assertThrows(MalformedURLException.class, action::run);
         Assert.assertTrue(exception.getMessage(), exception.getMessage().contains("unknown protocol: " + protocol));
+    }
+
+    private static <T> T opaque(T value) {
+        return Math.random() >= 0.0d ? value : null;
     }
 
     @FunctionalInterface

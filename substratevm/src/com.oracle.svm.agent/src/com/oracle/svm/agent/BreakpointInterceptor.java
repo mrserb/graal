@@ -1939,12 +1939,19 @@ final class BreakpointInterceptor {
         JNIObjectHandle callerClass = state.getDirectCallerClass();
         JNIObjectHandle protocol = getObjectArgument(thread, 1);
         String protocolName = fromJniString(jni, protocol);
-        /* These protocols are fetched reflectively in Native Image and directly in the JDK */
-        if ("jar".equals(protocolName) || "jrt".equals(protocolName)) {
-            String protocolClass = "sun.net.www.protocol." + protocolName + ".Handler";
+        String protocolClass = urlStreamHandlerReflectionTarget(protocolName);
+        if (protocolClass != null) {
             traceReflectBreakpoint(jni, bp.clazz, nullHandle(), callerClass, bp.specification.methodName, null, state.getFullStackTraceOrNull(), protocolClass);
         }
         return true;
+    }
+
+    private static String urlStreamHandlerReflectionTarget(String protocolName) {
+        /*
+         * The JDK asks the default factory for jar: during ordinary class path resource handling.
+         * Native Image handles those resources without requiring the jar URL handler metadata.
+         */
+        return "jrt".equals(protocolName) ? "sun.net.www.protocol.jrt.Handler" : null;
     }
 
     private static boolean allocateInstance(JNIEnvironment jni, JNIObjectHandle thread, @SuppressWarnings("unused") Breakpoint bp, InterceptedState state) {

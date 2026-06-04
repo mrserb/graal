@@ -832,6 +832,7 @@ def java_desktop_integration_task(native_image, extra_build_args=None):
 
 def conditional_config_task(native_image):
     agent_path = build_native_image_agent(native_image)
+    run_agent_jar_url_protocol_config_test(agent_path)
     conditional_config_filter_path = join(svmbuild_dir(), 'conditional-config-filter.json')
     with open(conditional_config_filter_path, 'w', encoding='utf-8') as conditional_config_filter:
         conditional_config_filter.write('''
@@ -843,6 +844,33 @@ def conditional_config_task(native_image):
 ''')
     run_agent_conditional_config_test(agent_path, conditional_config_filter_path)
     run_nic_conditional_config_test(agent_path, conditional_config_filter_path)
+
+
+def run_agent_jar_url_protocol_config_test(agent_path):
+    config_dir = join(svmbuild_dir(), 'jar-url-protocol-agent-test-config')
+    if exists(config_dir):
+        mx.rmtree(config_dir)
+
+    generator_class = 'com.oracle.svm.configure.test.config.ClassPathJarResourceAgentTest'
+    verifier_class = 'com.oracle.svm.configure.test.config.ClassPathJarResourceAgentVerifierTest'
+    agent_opts = ['config-output-dir=' + config_dir]
+    jvm_unittest(['-agentpath:' + agent_path + '=' + ','.join(agent_opts),
+                  '-D' + generator_class + '.generator.enabled=true'] +
+                 _configure_test_jvmci_exports() +
+                 [generator_class + '#accessClassPathJarResource'])
+    jvm_unittest(['-D' + verifier_class + '.verifier.enabled=true',
+                  '-D' + verifier_class + '.configpath=' + config_dir] +
+                 _configure_test_jvmci_exports() +
+                 [verifier_class + '#verifyJarUrlHandlerMetadataWasNotGenerated'])
+
+
+def _configure_test_jvmci_exports():
+    return [
+        '--add-exports=jdk.internal.vm.ci/jdk.vm.ci.meta=ALL-UNNAMED',
+        '--add-exports=jdk.internal.vm.ci/jdk.vm.ci.meta.annotation=ALL-UNNAMED',
+        '--add-exports=jdk.internal.vm.ci/jdk.vm.ci.meta.annotation=jdk.graal.compiler.vmaccess',
+        '--add-exports=jdk.internal.vm.ci/jdk.vm.ci.code=ALL-UNNAMED',
+    ]
 
 
 def run_nic_conditional_config_test(agent_path, conditional_config_filter_path):
@@ -868,12 +896,9 @@ def run_nic_conditional_config_test(agent_path, conditional_config_filter_path):
         agent_opts = ['config-output-dir=' + config_dir,
                       'experimental-conditional-config-part']
         jvm_unittest(['-agentpath:' + agent_path + '=' + ','.join(agent_opts),
-                      '-Dcom.oracle.svm.configure.test.conditionalconfig.PartialConfigurationGenerator.enabled=true',
-                      '--add-exports=jdk.internal.vm.ci/jdk.vm.ci.meta=ALL-UNNAMED',
-                      '--add-exports=jdk.internal.vm.ci/jdk.vm.ci.meta.annotation=ALL-UNNAMED',
-                      '--add-exports=jdk.internal.vm.ci/jdk.vm.ci.meta.annotation=jdk.graal.compiler.vmaccess',
-                      '--add-exports=jdk.internal.vm.ci/jdk.vm.ci.code=ALL-UNNAMED',
-                      'com.oracle.svm.configure.test.conditionalconfig.PartialConfigurationGenerator#' + test_case])
+                      '-Dcom.oracle.svm.configure.test.conditionalconfig.PartialConfigurationGenerator.enabled=true'] +
+                     _configure_test_jvmci_exports() +
+                     ['com.oracle.svm.configure.test.conditionalconfig.PartialConfigurationGenerator#' + test_case])
     config_output_dir = join(nic_test_dir, 'config-output')
     nic_exe = mx.cmd_suffix(join(mx.JDKConfig(home=mx_sdk_vm_impl.graalvm_output()).home, 'bin', 'native-image-utils'))
     nic_command = [nic_exe, 'generate-conditional',
@@ -884,12 +909,9 @@ def run_nic_conditional_config_test(agent_path, conditional_config_filter_path):
     mx.run(nic_command)
     jvm_unittest(
         ['-Dcom.oracle.svm.configure.test.conditionalconfig.ConfigurationVerifier.configpath=' + config_output_dir,
-         "-Dcom.oracle.svm.configure.test.conditionalconfig.ConfigurationVerifier.enabled=true",
-         '--add-exports=jdk.internal.vm.ci/jdk.vm.ci.meta=ALL-UNNAMED',
-         '--add-exports=jdk.internal.vm.ci/jdk.vm.ci.meta.annotation=ALL-UNNAMED',
-         '--add-exports=jdk.internal.vm.ci/jdk.vm.ci.meta.annotation=jdk.graal.compiler.vmaccess',
-         '--add-exports=jdk.internal.vm.ci/jdk.vm.ci.code=ALL-UNNAMED',
-         'com.oracle.svm.configure.test.conditionalconfig.ConfigurationVerifier'])
+         "-Dcom.oracle.svm.configure.test.conditionalconfig.ConfigurationVerifier.enabled=true"] +
+        _configure_test_jvmci_exports() +
+        ['com.oracle.svm.configure.test.conditionalconfig.ConfigurationVerifier'])
 
 
 def run_agent_conditional_config_test(agent_path, conditional_config_filter_path):
@@ -902,20 +924,14 @@ def run_agent_conditional_config_test(agent_path, conditional_config_filter_path
                   'conditional-config-class-filter-file=' + conditional_config_filter_path]
     # This run generates the configuration from different test cases
     jvm_unittest(['-agentpath:' + agent_path + '=' + ','.join(agent_opts),
-                  '-Dcom.oracle.svm.configure.test.conditionalconfig.ConfigurationGenerator.enabled=true',
-                  '--add-exports=jdk.internal.vm.ci/jdk.vm.ci.meta=ALL-UNNAMED',
-                  '--add-exports=jdk.internal.vm.ci/jdk.vm.ci.meta.annotation=ALL-UNNAMED',
-                  '--add-exports=jdk.internal.vm.ci/jdk.vm.ci.meta.annotation=jdk.graal.compiler.vmaccess',
-                  '--add-exports=jdk.internal.vm.ci/jdk.vm.ci.code=ALL-UNNAMED',
-                  'com.oracle.svm.configure.test.conditionalconfig.ConfigurationGenerator'])
+                  '-Dcom.oracle.svm.configure.test.conditionalconfig.ConfigurationGenerator.enabled=true'] +
+                 _configure_test_jvmci_exports() +
+                 ['com.oracle.svm.configure.test.conditionalconfig.ConfigurationGenerator'])
     # This run verifies that the generated configuration matches the expected one
     jvm_unittest(['-Dcom.oracle.svm.configure.test.conditionalconfig.ConfigurationVerifier.configpath=' + config_dir,
-                  '-Dcom.oracle.svm.configure.test.conditionalconfig.ConfigurationVerifier.enabled=true',
-                  '--add-exports=jdk.internal.vm.ci/jdk.vm.ci.meta=ALL-UNNAMED',
-                  '--add-exports=jdk.internal.vm.ci/jdk.vm.ci.meta.annotation=ALL-UNNAMED',
-                  '--add-exports=jdk.internal.vm.ci/jdk.vm.ci.meta.annotation=jdk.graal.compiler.vmaccess',
-                  '--add-exports=jdk.internal.vm.ci/jdk.vm.ci.code=ALL-UNNAMED',
-                  'com.oracle.svm.configure.test.conditionalconfig.ConfigurationVerifier'])
+                  '-Dcom.oracle.svm.configure.test.conditionalconfig.ConfigurationVerifier.enabled=true'] +
+                 _configure_test_jvmci_exports() +
+                 ['com.oracle.svm.configure.test.conditionalconfig.ConfigurationVerifier'])
 
 
 def javac_image_command(javac_path):

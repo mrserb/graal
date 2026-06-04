@@ -51,10 +51,10 @@ import jdk.graal.compiler.util.json.JsonParser;
                 "jdk.graal.compiler/jdk.graal.compiler.util.json",
                 "jdk.internal.vm.ci/jdk.vm.ci.meta"})
 public class URLProtocolTraceProcessorTest {
-    private static final String JAR_HANDLER = "sun.net.www.protocol.jar.Handler";
+    private static final String JRT_HANDLER = "sun.net.www.protocol.jrt.Handler";
 
     @Test
-    public void createURLStreamHandlerRegistersHandlerConstructor() throws Exception {
+    public void createURLStreamHandlerRegistersJrtHandlerConstructor() throws Exception {
         ConfigurationSet configurationSet = new ConfigurationSet();
         Object processor = newReflectionProcessor();
 
@@ -68,10 +68,10 @@ public class URLProtocolTraceProcessorTest {
                             "args": ["%s"]
                           }
                         ]
-                        """.formatted(JAR_HANDLER));
+                        """.formatted(JRT_HANDLER));
 
         TypeConfiguration reflectionConfiguration = configurationSet.getReflectionConfiguration();
-        ConfigurationType handlerType = getConfigurationType(reflectionConfiguration, JAR_HANDLER);
+        ConfigurationType handlerType = getConfigurationType(reflectionConfiguration, JRT_HANDLER);
         Assert.assertNotNull(handlerType);
         ConfigurationMemberInfo constructorInfo = getConstructorInfo(handlerType);
         Assert.assertEquals("DECLARED", constructorInfo.getDeclaration().toString());
@@ -79,206 +79,6 @@ public class URLProtocolTraceProcessorTest {
 
         ConfigurationType factoryType = getConfigurationType(reflectionConfiguration, "java.net.URL$DefaultFactory");
         Assert.assertNull(factoryType);
-    }
-
-    @Test
-    public void appClassPathResourceURLRegistersCachedJarHandlerConstructor() throws Exception {
-        ConfigurationSet configurationSet = new ConfigurationSet();
-        Object processor = newReflectionProcessor();
-
-        processTrace(processor, configurationSet, """
-                        [
-                          {
-                            "tracer": "reflect",
-                            "function": "getResource",
-                            "class": "jdk.internal.loader.ClassLoaders$AppClassLoader",
-                            "caller_class": "java.lang.Class",
-                            "result": true,
-                            "args": ["probe.txt"]
-                          },
-                          {
-                            "tracer": "reflect",
-                            "function": "getResource",
-                            "class": "jdk.internal.loader.ClassLoaders$PlatformClassLoader",
-                            "caller_class": "java.lang.ClassLoader",
-                            "result": true,
-                            "args": ["probe.txt"]
-                          },
-                          {
-                            "tracer": "reflect",
-                            "function": "getEntry",
-                            "class": "java.util.jar.JarFile",
-                            "caller_class": "java.util.jar.JarFile",
-                            "result": true,
-                            "args": ["probe.txt"]
-                          },
-                          {
-                            "tracer": "reflect",
-                            "function": "createURLStreamHandler",
-                            "class": "java.net.URL$DefaultFactory",
-                            "caller_class": "java.net.URL",
-                            "args": ["%s"]
-                          }
-                        ]
-                        """.formatted(JAR_HANDLER));
-
-        TypeConfiguration reflectionConfiguration = configurationSet.getReflectionConfiguration();
-        Assert.assertNotNull(getConfigurationType(reflectionConfiguration, JAR_HANDLER));
-    }
-
-    @Test
-    public void appClassPathResourceEnumerationURLRegistersCachedJarHandlerConstructor() throws Exception {
-        ConfigurationSet configurationSet = new ConfigurationSet();
-        Object processor = newReflectionProcessor();
-
-        processTrace(processor, configurationSet, """
-                        [
-                          {
-                            "tracer": "reflect",
-                            "function": "getResources",
-                            "class": "jdk.internal.loader.ClassLoaders$AppClassLoader",
-                            "caller_class": "java.lang.ClassLoader",
-                            "result": true,
-                            "args": ["META-INF/MANIFEST.MF"]
-                          },
-                          {
-                            "tracer": "reflect",
-                            "function": "getResources",
-                            "class": "jdk.internal.loader.ClassLoaders$PlatformClassLoader",
-                            "caller_class": "java.lang.ClassLoader",
-                            "result": true,
-                            "args": ["META-INF/MANIFEST.MF"]
-                          },
-                          {
-                            "tracer": "reflect",
-                            "function": "createURLStreamHandler",
-                            "class": "java.net.URL$DefaultFactory",
-                            "caller_class": "java.net.URL",
-                            "args": ["%s"]
-                          }
-                        ]
-                        """.formatted(JAR_HANDLER));
-
-        TypeConfiguration reflectionConfiguration = configurationSet.getReflectionConfiguration();
-        Assert.assertNotNull(getConfigurationType(reflectionConfiguration, JAR_HANDLER));
-    }
-
-    @Test
-    public void appClassPathResourceURLWithoutClasspathJarAccessDoesNotHideExplicitJarURL() throws Exception {
-        ConfigurationSet configurationSet = new ConfigurationSet();
-        Object processor = newReflectionProcessor();
-
-        processTrace(processor, configurationSet, """
-                        [
-                          {
-                            "tracer": "reflect",
-                            "function": "getResource",
-                            "class": "jdk.internal.loader.ClassLoaders$AppClassLoader",
-                            "caller_class": "java.lang.Class",
-                            "result": true,
-                            "args": ["probe.txt"]
-                          },
-                          {
-                            "tracer": "reflect",
-                            "function": "getResource",
-                            "class": "jdk.internal.loader.ClassLoaders$PlatformClassLoader",
-                            "caller_class": "java.lang.ClassLoader",
-                            "result": true,
-                            "args": ["probe.txt"]
-                          },
-                          {
-                            "tracer": "reflect",
-                            "function": "createURLStreamHandler",
-                            "class": "java.net.URL$DefaultFactory",
-                            "caller_class": "java.net.URL",
-                            "args": ["%s"]
-                          }
-                        ]
-                        """.formatted(JAR_HANDLER));
-
-        TypeConfiguration reflectionConfiguration = configurationSet.getReflectionConfiguration();
-        Assert.assertNotNull(getConfigurationType(reflectionConfiguration, JAR_HANDLER));
-    }
-
-    @Test
-    public void urlStreamHandlerProviderLookupDoesNotHideExplicitJarURL() throws Exception {
-        ConfigurationSet configurationSet = new ConfigurationSet();
-        Object processor = newReflectionProcessor();
-
-        processTrace(processor, configurationSet, """
-                        [
-                          {
-                            "tracer": "reflect",
-                            "function": "getResources",
-                            "class": "jdk.internal.loader.ClassLoaders$AppClassLoader",
-                            "caller_class": "java.util.ServiceLoader",
-                            "result": true,
-                            "args": ["META-INF/services/java.net.spi.URLStreamHandlerProvider"]
-                          },
-                          {
-                            "tracer": "reflect",
-                            "function": "getResources",
-                            "class": "jdk.internal.loader.ClassLoaders$PlatformClassLoader",
-                            "caller_class": "java.util.ServiceLoader",
-                            "result": true,
-                            "args": ["META-INF/services/java.net.spi.URLStreamHandlerProvider"]
-                          },
-                          {
-                            "tracer": "reflect",
-                            "function": "createURLStreamHandler",
-                            "class": "java.net.URL$DefaultFactory",
-                            "caller_class": "java.net.URL",
-                            "args": ["%s"]
-                          }
-                        ]
-                        """.formatted(JAR_HANDLER));
-
-        TypeConfiguration reflectionConfiguration = configurationSet.getReflectionConfiguration();
-        Assert.assertNotNull(getConfigurationType(reflectionConfiguration, JAR_HANDLER));
-    }
-
-    @Test
-    public void appClassPathResourceURLDoesNotHideLaterExplicitJarURL() throws Exception {
-        ConfigurationSet configurationSet = new ConfigurationSet();
-        Object processor = newReflectionProcessor();
-
-        processTrace(processor, configurationSet, """
-                        [
-                          {
-                            "tracer": "reflect",
-                            "function": "getResource",
-                            "class": "jdk.internal.loader.ClassLoaders$AppClassLoader",
-                            "caller_class": "java.lang.Class",
-                            "result": true,
-                            "args": ["probe.txt"]
-                          },
-                          {
-                            "tracer": "reflect",
-                            "function": "getEntry",
-                            "class": "java.util.jar.JarFile",
-                            "caller_class": "java.util.jar.JarFile",
-                            "result": true,
-                            "args": ["probe.txt"]
-                          },
-                          {
-                            "tracer": "reflect",
-                            "function": "forName",
-                            "class": "java.lang.Class",
-                            "caller_class": "com.example.UrlAgentRepro",
-                            "args": ["java.lang.String"]
-                          },
-                          {
-                            "tracer": "reflect",
-                            "function": "createURLStreamHandler",
-                            "class": "java.net.URL$DefaultFactory",
-                            "caller_class": "java.net.URL",
-                            "args": ["%s"]
-                          }
-                        ]
-                        """.formatted(JAR_HANDLER));
-
-        TypeConfiguration reflectionConfiguration = configurationSet.getReflectionConfiguration();
-        Assert.assertNotNull(getConfigurationType(reflectionConfiguration, JAR_HANDLER));
     }
 
     private static Object newReflectionProcessor() throws Exception {

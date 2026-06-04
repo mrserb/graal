@@ -106,7 +106,7 @@ public abstract class AbstractImageHeapSnippetReflectionProvider implements Snip
 
     @Override
     public <T> T getInjectedNodeIntrinsicParameter(Class<T> type) {
-        if (type == WordTypes.class) {
+        if (type.isInstance(wordTypes)) {
             return type.cast(wordTypes);
         }
         return null;

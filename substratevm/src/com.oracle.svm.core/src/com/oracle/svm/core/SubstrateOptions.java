@@ -678,7 +678,9 @@ public class SubstrateOptions {
     public static final HostedOptionKey<AccumulatingLocatableMultiOptionValue.Strings> EnableURLProtocols = new HostedOptionKey<>(
                     AccumulatingLocatableMultiOptionValue.Strings.buildWithCommaDelimiter());
 
-    @Option(help = "List of comma separated URL protocols that must never be included.", deprecated = true, deprecationMessage = "Omit protocol from reachability metadata.")//
+    private static final String DEPRECATION_MESSAGE_DISABLE_URL_PROTOCOLS = "Non-default URL protocols are disabled unless registered in reachability metadata. " +
+                    "This option has no reachability-metadata replacement for default protocols such as file and resource.";
+    @Option(help = "List of comma separated URL protocols that must never be included.", deprecated = true, deprecationMessage = DEPRECATION_MESSAGE_DISABLE_URL_PROTOCOLS)//
     public static final HostedOptionKey<AccumulatingLocatableMultiOptionValue.Strings> DisableURLProtocols = new HostedOptionKey<>(
                     AccumulatingLocatableMultiOptionValue.Strings.buildWithCommaDelimiter());
 

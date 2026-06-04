@@ -324,7 +324,7 @@ class JavaNetFeature implements InternalFeature {
             JavaNetSubstitutions.registerURLProtocol(access, protocol);
         }
 
-        RuntimeResourceSupport.singleton().addResources(AccessCondition.typeReached(URL.class), "META-INF/services/java.net.spi.URLStreamHandlerProvider", "JavaNetFeature for URL");
+        RuntimeResourceSupport.singleton().addResources(AccessCondition.unconditional(), "META-INF/services/java.net.spi.URLStreamHandlerProvider", "JavaNetFeature for URL");
     }
 }
 

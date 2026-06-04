@@ -43,6 +43,8 @@ For example, to use the `http` and `https` protocols, add this entry to _META-IN
 
 Use the same form for other JDK protocols, for example `jar`, `jrt`, `ftp`, `jmod`, or `mailto`,
 by replacing the protocol name in the handler class.
+For `jrt`, registering `sun.net.www.protocol.jrt.Handler` only enables URL construction.
+Opening a `jrt:` connection also requires `-H:+AllowJRTFileSystem`, and runtime module access depends on `java.home`.
 If a native executable accesses a supported protocol that was not registered, the URL lookup fails at run time
 and reports the handler class that must be added to reachability metadata.
 

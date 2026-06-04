@@ -146,7 +146,7 @@ native-image --trace-object-instantiation=com.example.MyClass <class>
 
 ## Network support
 
-**If the binary needs JDK URL protocol handlers such as HTTP/HTTPS:**
+**If the binary needs JDK URL protocol handlers such as HTTP or HTTPS:**
 ```json
 {
   "reflection": [
@@ -162,7 +162,8 @@ native-image --trace-object-instantiation=com.example.MyClass <class>
 }
 ```
 
-The `--enable-http`, `--enable-https`, and `--enable-url-protocols` options are deprecated; use reachability metadata instead.
+The `--enable-http`, `--enable-https`, and `--enable-url-protocols` options are deprecated.
+Use reachability metadata instead.
 
 ## Monitoring and observability
 

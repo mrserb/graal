@@ -10,11 +10,11 @@ redirect_from: /reference-manual/native-image/URLProtocols/
 
 Native Image includes URL protocol handlers that are reachable in the generated binary.
 The `file` and `resource` URL protocols are enabled by default.
-Resources still have to be included through [reachability metadata](ReachabilityMetadata.md#resources) before the `resource` protocol can resolve them.
+Resources must still be included through [reachability metadata](ReachabilityMetadata.md#resources) before the `resource` protocol can resolve them.
 
 Other JDK URL protocol handlers are supported but not enabled by default.
-To use one of them, register the corresponding `sun.net.www.protocol.<protocol>.Handler` constructor in reachability metadata.
-For example, to use `http` and `https`, add this entry to _META-INF/native-image/reachability-metadata.json_:
+To use one, register the corresponding `sun.net.www.protocol.<protocol>.Handler` constructor in reachability metadata.
+For example, to use the `http` and `https` protocols, add this entry to _META-INF/native-image/reachability-metadata.json_:
 
 ```json
 {
@@ -46,8 +46,8 @@ by replacing the protocol name in the handler class.
 If a native executable accesses a supported protocol that was not registered, the URL lookup fails at run time
 and reports the handler class that must be added to reachability metadata.
 
-The command-line options `--enable-http`, `--enable-https`, and `--enable-url-protocols` are deprecated.
-Use reachability metadata to register URL protocol handlers instead.
+The `--enable-http`, `--enable-https`, and `--enable-url-protocols` options are deprecated.
+Use reachability metadata instead.
 
 ## HTTPS Support
 Support for the `https` URL protocol relies on the Java Cryptography Architecture (JCA) framework.

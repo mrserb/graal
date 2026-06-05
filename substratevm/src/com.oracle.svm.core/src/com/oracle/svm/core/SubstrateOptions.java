@@ -671,8 +671,40 @@ public class SubstrateOptions {
     @Option(help = "Trace all native tool invocations as part of image building", type = User)//
     public static final HostedOptionKey<Boolean> TraceNativeToolUsage = new HostedOptionKey<>(false);
 
-    @APIOption(name = "enable-http", fixedValue = "http", customHelp = "enable http support in the generated image", deprecated = "Use reachability metadata instead.")//
-    @APIOption(name = "enable-https", fixedValue = "https", customHelp = "enable https support in the generated image", deprecated = "Use reachability metadata instead.")//
+    private static final String DEPRECATION_MESSAGE_ENABLE_HTTP = """
+                    Use reachability metadata instead. Add this entry to META-INF/native-image/reachability-metadata.json:
+                    {
+                      "reflection": [
+                        {
+                          "type": "sun.net.www.protocol.http.Handler",
+                          "methods": [
+                            {
+                              "name": "<init>",
+                              "parameterTypes": []
+                            }
+                          ]
+                        }
+                      ]
+                    }""";
+    private static final String DEPRECATION_MESSAGE_ENABLE_HTTPS = """
+                    Use reachability metadata instead. Add this entry to META-INF/native-image/reachability-metadata.json:
+                    {
+                      "reflection": [
+                        {
+                          "type": "sun.net.www.protocol.https.Handler",
+                          "methods": [
+                            {
+                              "name": "<init>",
+                              "parameterTypes": []
+                            }
+                          ]
+                        }
+                      ]
+                    }""";
+    @APIOption(name = "enable-http", fixedValue = "http", customHelp = "enable http support in the generated image",
+                    deprecated = DEPRECATION_MESSAGE_ENABLE_HTTP)//
+    @APIOption(name = "enable-https", fixedValue = "https", customHelp = "enable https support in the generated image",
+                    deprecated = DEPRECATION_MESSAGE_ENABLE_HTTPS)//
     @APIOption(name = "enable-url-protocols", deprecated = "Use reachability metadata instead.")//
     @Option(help = "List of comma separated URL protocols to enable.")//
     public static final HostedOptionKey<AccumulatingLocatableMultiOptionValue.Strings> EnableURLProtocols = new HostedOptionKey<>(

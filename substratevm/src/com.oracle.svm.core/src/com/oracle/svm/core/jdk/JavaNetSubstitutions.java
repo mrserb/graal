@@ -26,8 +26,6 @@ package com.oracle.svm.core.jdk;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.net.URLStreamHandler;
@@ -98,47 +96,6 @@ final class Target_java_net_URL {
     @Alias //
     private static native boolean isOverrideable(String protocol);
 
-    @Substitute
-    @SuppressWarnings("deprecation")
-    public static URL of(URI uri, URLStreamHandler handler) throws MalformedURLException {
-        if (!uri.isAbsolute()) {
-            throw new IllegalArgumentException("URI is not absolute");
-        }
-
-        String protocol = uri.getScheme();
-        if (handler == null && protocol.equals("jrt") && !uri.isOpaque() && uri.getRawAuthority() == null && uri.getRawFragment() == null) {
-            String query = uri.getRawQuery();
-            String path = uri.getRawPath();
-            String file = query == null ? path : path + "?" + query;
-
-            String host = uri.getHost();
-            if (host == null) {
-                host = "";
-            }
-
-            int port = uri.getPort();
-            return new URL("jrt", host, port, file, null);
-        }
-
-        if ("url".equalsIgnoreCase(protocol)) {
-            String uristr = uri.toString();
-            try {
-                URI inner = new URI(uristr.substring(4));
-                if (inner.isAbsolute()) {
-                    protocol = inner.getScheme();
-                }
-            } catch (URISyntaxException e) {
-                throw new MalformedURLException(e.getMessage());
-            }
-        }
-
-        if (handler != null && !isOverrideable(protocol)) {
-            throw new IllegalArgumentException("Can't override URLStreamHandler for protocol " + protocol);
-        }
-
-        return new URL((URL) null, uri.toString(), handler);
-    }
-
     @Alias //
     private static native URLStreamHandler lookupViaProviders(String protocol);
 
@@ -146,8 +103,8 @@ final class Target_java_net_URL {
     private static native URLStreamHandler lookupViaProperty(String protocol);
 
     /**
-     * Same as in the JDK except: disabled protocols are rejected before any handler lookup path,
-     * including cached, built-in, factory, provider, property, and default-factory handlers.
+     * Same as in the JDK except: disabled protocols are rejected before any handler lookup, jrt
+     * handlers use Native Image JRT support when enabled, and resource is not overrideable.
      */
     @Substitute
     @TargetElement(name = "getURLStreamHandler")

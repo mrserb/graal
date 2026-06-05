@@ -56,6 +56,7 @@ import com.oracle.svm.shared.option.HostedOptionKey;
 import com.oracle.svm.shared.singletons.traits.BuiltinTraits.BuildtimeAccessOnly;
 import com.oracle.svm.shared.singletons.traits.BuiltinTraits.NoLayeredCallbacks;
 import com.oracle.svm.shared.singletons.traits.SingletonTraits;
+import com.oracle.svm.shared.util.BasedOnJDKClass;
 import com.oracle.svm.shared.util.ReflectionUtil;
 import com.oracle.svm.shared.util.VMError;
 
@@ -302,6 +303,13 @@ final class Target_sun_net_www_protocol_jrt_Handler {
     }
 }
 
+/*
+ * Mirrors the JDK JavaRuntimeURLConnection. Native Image cannot use that class directly because
+ * its package-private constructor and static ImageReader field bind it to ImageReaderFactory at
+ * class initialization. JRTSupport keeps resource lookup conditional and lazy, and also checks
+ * embedded resources before opening the runtime modules image.
+ */
+@BasedOnJDKClass(className = "sun.net.www.protocol.jrt.JavaRuntimeURLConnection")
 final class JRTURLConnection extends URLConnection {
     private final String module;
     private final String name;

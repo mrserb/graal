@@ -111,6 +111,43 @@ public class RuntimeDynamicAccessMetadata {
         return conditions == null;
     }
 
+    /**
+     * Returns metadata that is available whenever either input metadata is available. This is used
+     * when the same value is registered multiple times and the runtime should honor the union of
+     * all registrations. If any merged registration is non-preserved, the resulting metadata is
+     * non-preserved.
+     */
+    @Platforms(Platform.HOSTED_ONLY.class)
+    public static RuntimeDynamicAccessMetadata merge(RuntimeDynamicAccessMetadata current, RuntimeDynamicAccessMetadata additional) {
+        if (current == null) {
+            return additional;
+        } else if (additional == null) {
+            return current;
+        }
+        boolean mergedPreserved = current.preserved && additional.preserved;
+        if (current.isAlwaysAvailable() || additional.isAlwaysAvailable()) {
+            return alwaysAvailable(mergedPreserved);
+        }
+        Object[] mergedConditions = Arrays.copyOf(current.conditions, current.conditions.length + additional.conditions.length);
+        int mergedLength = current.conditions.length;
+        for (Object additionalCondition : additional.conditions) {
+            boolean seen = false;
+            for (Object currentCondition : current.conditions) {
+                if (currentCondition.equals(additionalCondition)) {
+                    seen = true;
+                    break;
+                }
+            }
+            if (!seen) {
+                mergedConditions[mergedLength++] = additionalCondition;
+            }
+        }
+        if (mergedLength < mergedConditions.length) {
+            mergedConditions = Arrays.copyOf(mergedConditions, mergedLength);
+        }
+        return intern(mergedConditions, mergedPreserved);
+    }
+
     @Platforms(Platform.HOSTED_ONLY.class)
     public EconomicSet<Class<?>> getTypesForEncoding() {
         if (conditions == null || satisfied) {

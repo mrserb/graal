@@ -34,6 +34,8 @@ import org.junit.Test;
 import com.oracle.svm.configure.NamedConfigurationTypeDescriptor;
 import com.oracle.svm.configure.UnresolvedAccessCondition;
 import com.oracle.svm.configure.config.ConfigurationFileCollection;
+import com.oracle.svm.configure.config.ConfigurationMemberInfo;
+import com.oracle.svm.configure.config.ConfigurationMethod;
 import com.oracle.svm.configure.config.ConfigurationSet;
 import com.oracle.svm.configure.config.ConfigurationType;
 import com.oracle.svm.configure.config.TypeConfiguration;
@@ -71,6 +73,22 @@ public class ClassPathJarResourceAgentVerifierTest {
                         getConfigurationType(reflectionConfiguration, JAR_HANDLER));
     }
 
+    @Test
+    public void verifyJarUrlHandlerMetadataWasGenerated() throws Exception {
+        assumeTrue("Test must be explicitly enabled because it verifies a previous agent run",
+                        Boolean.getBoolean(VERIFIER_ENABLED_PROPERTY));
+
+        TypeConfiguration reflectionConfiguration = loadActualConfig().getReflectionConfiguration();
+        ConfigurationType jarHandlerType = getConfigurationType(reflectionConfiguration, JAR_HANDLER);
+        Assert.assertNotNull("""
+                        Explicit jar: URL access must add reflective metadata for the JDK jar URL \
+                        handler, even if an earlier classpath resource lookup cached the handler.""",
+                        jarHandlerType);
+        ConfigurationMemberInfo constructorInfo = getConstructorInfo(jarHandlerType);
+        Assert.assertNotNull("Missing JDK jar URL handler constructor metadata", constructorInfo);
+        Assert.assertEquals("ACCESSED", constructorInfo.getAccessibility().toString());
+    }
+
     private static ConfigurationSet loadActualConfig() throws Exception {
         String configurationPath = System.getProperty(CONFIG_PATH_PROPERTY);
         Assert.assertNotNull("Missing generated configuration path", configurationPath);
@@ -82,5 +100,10 @@ public class ClassPathJarResourceAgentVerifierTest {
     private static ConfigurationType getConfigurationType(TypeConfiguration reflectionConfiguration, String className) {
         return reflectionConfiguration.get(UnresolvedAccessCondition.unconditional(),
                         NamedConfigurationTypeDescriptor.fromReflectionName(className));
+    }
+
+    private static ConfigurationMemberInfo getConstructorInfo(ConfigurationType configurationType) {
+        ConfigurationMethod constructorMethod = new ConfigurationMethod("<init>", "()V");
+        return ConfigurationType.TestBackdoor.getMethodInfoIfPresent(configurationType, constructorMethod);
     }
 }

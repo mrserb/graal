@@ -51,10 +51,20 @@ import jdk.graal.compiler.util.json.JsonParser;
                 "jdk.graal.compiler/jdk.graal.compiler.util.json",
                 "jdk.internal.vm.ci/jdk.vm.ci.meta"})
 public class URLProtocolTraceProcessorTest {
+    private static final String JAR_HANDLER = "sun.net.www.protocol.jar.Handler";
     private static final String JRT_HANDLER = "sun.net.www.protocol.jrt.Handler";
 
     @Test
     public void createURLStreamHandlerRegistersJrtHandlerConstructor() throws Exception {
+        assertURLStreamHandlerConstructorRegistered("createURLStreamHandler", JRT_HANDLER);
+    }
+
+    @Test
+    public void getURLStreamHandlerRegistersJarHandlerConstructor() throws Exception {
+        assertURLStreamHandlerConstructorRegistered("getURLStreamHandler", JAR_HANDLER);
+    }
+
+    private static void assertURLStreamHandlerConstructorRegistered(String function, String handlerClassName) throws Exception {
         ConfigurationSet configurationSet = new ConfigurationSet();
         Object processor = newReflectionProcessor();
 
@@ -62,16 +72,16 @@ public class URLProtocolTraceProcessorTest {
                         [
                           {
                             "tracer": "reflect",
-                            "function": "createURLStreamHandler",
+                            "function": "%s",
                             "class": "java.net.URL$DefaultFactory",
                             "caller_class": "com.example.UrlAgentRepro",
                             "args": ["%s"]
                           }
                         ]
-                        """.formatted(JRT_HANDLER));
+                        """.formatted(function, handlerClassName));
 
         TypeConfiguration reflectionConfiguration = configurationSet.getReflectionConfiguration();
-        ConfigurationType handlerType = getConfigurationType(reflectionConfiguration, JRT_HANDLER);
+        ConfigurationType handlerType = getConfigurationType(reflectionConfiguration, handlerClassName);
         Assert.assertNotNull(handlerType);
         ConfigurationMemberInfo constructorInfo = getConstructorInfo(handlerType);
         Assert.assertEquals("DECLARED", constructorInfo.getDeclaration().toString());

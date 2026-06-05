@@ -255,7 +255,8 @@ class ReflectionProcessor extends AbstractProcessor {
                 configuration.getOrCreateType(condition, clazz).setUnsafeAllocated();
                 break;
             }
-            case "createURLStreamHandler": {
+            case "createURLStreamHandler":
+            case "getURLStreamHandler": {
                 ConfigurationTypeDescriptor handlerClass = descriptorForClass(singleElement(args));
                 configuration.getOrCreateType(condition, handlerClass)
                                 .addMethod(ConfigurationMethod.CONSTRUCTOR_NAME, "()V", ConfigurationMemberDeclaration.DECLARED,

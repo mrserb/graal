@@ -61,7 +61,19 @@ public class ClassPathJarResourceAgentTest {
     public void accessClassPathJarResource() throws Exception {
         assumeTrue("Test must be explicitly enabled because it is designed to run under the agent",
                         Boolean.getBoolean(GENERATOR_ENABLED_PROPERTY));
+        accessClassPathJarResourceInternal();
+    }
 
+    @Test
+    public void accessClassPathJarResourceThenExplicitJarURL() throws Exception {
+        assumeTrue("Test must be explicitly enabled because it is designed to run under the agent",
+                        Boolean.getBoolean(GENERATOR_ENABLED_PROPERTY));
+
+        accessClassPathJarResourceInternal();
+        accessExplicitJarURL();
+    }
+
+    private static void accessClassPathJarResourceInternal() throws Exception {
         Path jarFile = Files.createTempFile("native-image-agent-classpath-resource", ".jar");
         try {
             writeProbeJar(jarFile);
@@ -76,6 +88,22 @@ public class ClassPathJarResourceAgentTest {
                 }
             }
             Assert.assertSame(ReflectiveProbe.class, Class.forName(ReflectiveProbe.class.getName()));
+        } finally {
+            Files.deleteIfExists(jarFile);
+        }
+    }
+
+    private static void accessExplicitJarURL() throws Exception {
+        Path jarFile = Files.createTempFile("native-image-agent-explicit-jar-url", ".jar");
+        try {
+            writeProbeJar(jarFile);
+            URL resource = new URL("jar:" + jarFile.toUri() + "!/" + RESOURCE_NAME);
+            Assert.assertEquals("jar", resource.getProtocol());
+            URLConnection connection = resource.openConnection();
+            connection.setUseCaches(false);
+            try (InputStream input = connection.getInputStream()) {
+                Assert.assertEquals(RESOURCE_CONTENTS, new String(input.readAllBytes(), StandardCharsets.UTF_8));
+            }
         } finally {
             Files.deleteIfExists(jarFile);
         }

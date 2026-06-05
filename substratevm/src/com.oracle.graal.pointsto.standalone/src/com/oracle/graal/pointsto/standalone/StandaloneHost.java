@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, 2025, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2022, 2026, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2022, 2022, Alibaba Group Holding Limited. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -36,15 +36,11 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.oracle.graal.pointsto.BigBang;
-import com.oracle.graal.pointsto.PointsToAnalysis;
 import com.oracle.graal.pointsto.api.HostVM;
-import com.oracle.graal.pointsto.flow.MethodTypeFlowBuilder.ObjectConstantHandler;
 import com.oracle.graal.pointsto.meta.AnalysisField;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.meta.HostedProviders;
-import com.oracle.graal.pointsto.standalone.meta.StandaloneConstantReflectionProvider;
-import com.oracle.graal.pointsto.standalone.meta.StandaloneObjectConstantHandler;
 import com.oracle.graal.pointsto.standalone.plugins.StandaloneGraphBuilderPhase;
 import com.oracle.graal.pointsto.util.AnalysisError;
 import com.oracle.graal.pointsto.util.AnalysisFuture;
@@ -305,11 +301,6 @@ public class StandaloneHost extends HostVM {
     public void onTypeReachable(BigBang bb, AnalysisType type) {
         AnalysisError.guarantee(type.isReachable(), "Registering and initializing a type that was not yet marked as reachable: %s", type.toJavaName());
         maybeInitializeAtBuildTime(type);
-    }
-
-    @Override
-    public ObjectConstantHandler createMethodTypeFlowBuilderObjectConstantHandler(PointsToAnalysis bb) {
-        return new StandaloneObjectConstantHandler((StandaloneConstantReflectionProvider) bb.getConstantReflectionProvider());
     }
 
     @Override

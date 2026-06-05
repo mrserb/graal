@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, 2025, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2022, 2026, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2022, 2024, Alibaba Group Holding Limited. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -74,11 +74,6 @@ public class StandaloneConstantReflectionProvider implements ConstantReflectionP
      */
     private JavaConstant commonPoolSubstitution;
     /**
-     * Classifies guest-provider-specific metadata constants that standalone should expose only as
-     * conservative type information instead of materializing as ordinary heap objects.
-     */
-    private final StandaloneUnsupportedGuestObjectSupport unsupportedGuestObjectSupport;
-    /**
      * Standalone-owned field-value availability layer used to decide when static reads may switch
      * from original-provider semantics to shadow-heap-backed values.
      */
@@ -100,7 +95,6 @@ public class StandaloneConstantReflectionProvider implements ConstantReflectionP
                     StandaloneFieldValueAvailabilitySupport fieldValueAvailabilitySupport) {
         this.universe = universe;
         this.original = original;
-        this.unsupportedGuestObjectSupport = new StandaloneUnsupportedGuestObjectSupport(universe, original);
         this.fieldValueAvailabilitySupport = fieldValueAvailabilitySupport;
         if (!fullyIsolated) {
             commonPoolField = aMetaAccess.lookupJavaField(ReflectionUtil.lookupField(ForkJoinPool.class, "common"));
@@ -274,14 +268,6 @@ public class StandaloneConstantReflectionProvider implements ConstantReflectionP
             return type;
         }
         return null;
-    }
-
-    /**
-     * Returns the exposed analysis type for guest constants that must remain opaque metadata
-     * instead of being treated as ordinary heap objects.
-     */
-    public AnalysisType getUnsupportedObjectType(JavaConstant constant) {
-        return unsupportedGuestObjectSupport.getExposedType(constant);
     }
 
     @Override

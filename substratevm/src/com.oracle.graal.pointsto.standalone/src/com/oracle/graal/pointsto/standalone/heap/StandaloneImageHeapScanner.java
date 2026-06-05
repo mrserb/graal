@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, 2025, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2022, 2026, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2022, 2022, Alibaba Group Holding Limited. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -26,39 +26,28 @@
 
 package com.oracle.graal.pointsto.standalone.heap;
 
-import java.util.concurrent.ConcurrentHashMap;
-
 import com.oracle.graal.pointsto.BigBang;
 import com.oracle.graal.pointsto.ObjectScanningObserver;
-import com.oracle.graal.pointsto.ObjectScanner.ScanReason;
 import com.oracle.graal.pointsto.heap.HostedValuesProvider;
 import com.oracle.graal.pointsto.heap.ImageHeap;
 import com.oracle.graal.pointsto.heap.ImageHeapConstant;
-import com.oracle.graal.pointsto.heap.ImageHeapRelocatableConstant;
 import com.oracle.graal.pointsto.heap.ImageHeapScanner;
 import com.oracle.graal.pointsto.meta.AnalysisField;
 import com.oracle.graal.pointsto.meta.AnalysisMetaAccess;
-import com.oracle.graal.pointsto.meta.AnalysisType;
-import com.oracle.graal.pointsto.standalone.meta.StandaloneConstantReflectionProvider;
 
 import jdk.graal.compiler.api.replacements.SnippetReflectionProvider;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.JavaConstant;
 
 /**
  * Standalone heap scanner that consults the standalone hosted-values availability layer before
- * snapshotting hosted values and keeps the remaining unsupported guest metadata constants out of
- * the standalone shadow heap.
+ * snapshotting hosted values.
  */
 public class StandaloneImageHeapScanner extends ImageHeapScanner {
-    private final StandaloneConstantReflectionProvider standaloneConstantReflection;
-    private final ConcurrentHashMap<AnalysisType, ImageHeapConstant> unsupportedObjectPlaceholders;
-
     public StandaloneImageHeapScanner(BigBang bb, ImageHeap heap, AnalysisMetaAccess aMetaAccess, SnippetReflectionProvider aSnippetReflection,
-                    StandaloneConstantReflectionProvider aConstantReflection, ObjectScanningObserver aScanningObserver,
+                    ConstantReflectionProvider aConstantReflection, ObjectScanningObserver aScanningObserver,
                     HostedValuesProvider hostedValuesProvider) {
         super(bb, heap, aMetaAccess, aSnippetReflection, aConstantReflection, aScanningObserver, hostedValuesProvider);
-        this.standaloneConstantReflection = aConstantReflection;
-        this.unsupportedObjectPlaceholders = new ConcurrentHashMap<>();
     }
 
     /**
@@ -75,25 +64,6 @@ public class StandaloneImageHeapScanner extends ImageHeapScanner {
             return readHostedFieldValue(field, hostedReceiver).isAvailable();
         }
         return super.isValueAvailable(field, receiver);
-    }
-
-    @Override
-    public JavaConstant createImageHeapConstant(JavaConstant constant, ScanReason reason) {
-        AnalysisType unsupportedType = standaloneConstantReflection.getUnsupportedObjectType(constant);
-        if (unsupportedType == null) {
-            return super.createImageHeapConstant(constant, reason);
-        }
-        /*
-         * The method-type-flow hook suppresses constants classified by
-         * StandaloneUnsupportedGuestObjectSupport on the normal graph constant path, but late
-         * standalone-owned producers still exist. In particular, ImageHeapScanner.computeTypeData()
-         * snapshots raw static field values and routes them through createFieldValue() and this
-         * method before the analysis reaches a fixed point. Keep those unsupported guest metadata
-         * constants out of the shadow heap by substituting an opaque non-null placeholder keyed
-         * only by the exposed analysis type.
-         */
-        return unsupportedObjectPlaceholders.computeIfAbsent(unsupportedType,
-                        ignoredType -> ImageHeapRelocatableConstant.create(ignoredType, "unsupported-guest-object:" + ignoredType.toJavaName()));
     }
 
     private static JavaConstant getHostedReceiver(JavaConstant receiver) {

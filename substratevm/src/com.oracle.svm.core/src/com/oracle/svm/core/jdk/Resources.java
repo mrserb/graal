@@ -331,14 +331,14 @@ public final class Resources {
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)
-    public void addResourceCondition(Module module, String resourceName, AccessCondition condition) {
+    public void addResourceCondition(Module module, String resourceName, AccessCondition condition, boolean preserved) {
         synchronized (resources) {
             MapCursor<ModuleResourceKey, ConditionalRuntimeValue<ResourceStorageEntryBase>> cursor = resources.getEntries();
             while (cursor.advance()) {
                 ModuleResourceKey key = cursor.getKey();
                 if (resourceName.equals(key.resource()) && Objects.equals(moduleName(module), key.getModuleName())) {
                     ConditionalRuntimeValue<ResourceStorageEntryBase> current = cursor.getValue();
-                    RuntimeDynamicAccessMetadata newMetadata = RuntimeDynamicAccessMetadata.addCondition(current.getDynamicAccessMetadata(), condition, false);
+                    RuntimeDynamicAccessMetadata newMetadata = RuntimeDynamicAccessMetadata.addCondition(current.getDynamicAccessMetadata(), condition, preserved);
                     cursor.setValue(new ConditionalRuntimeValue<>(newMetadata, current.getValueUnconditionally()));
                 }
             }

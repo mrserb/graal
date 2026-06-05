@@ -75,6 +75,12 @@ public class RuntimeDynamicAccessMetadata {
         return addCondition(null, condition, preserved);
     }
 
+    /**
+     * Returns metadata with {@code cnd} merged in. Existing always-available metadata remains
+     * always available: adding a condition to something that is already unconditional must not
+     * narrow its availability. If any merged registration is non-preserved, the resulting metadata
+     * is non-preserved.
+     */
     @Platforms(Platform.HOSTED_ONLY.class)
     public static RuntimeDynamicAccessMetadata addCondition(RuntimeDynamicAccessMetadata current, AccessCondition cnd, boolean preserved) {
         VMError.guarantee(cnd instanceof TypeReachabilityCondition, "Only TypeReachabilityCondition conditions can be used in RuntimeConditionSet.");

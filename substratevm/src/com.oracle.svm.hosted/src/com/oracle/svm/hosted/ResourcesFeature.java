@@ -249,7 +249,7 @@ public class ResourcesFeature implements InternalFeature {
                 classInitializationSupport.addForTypeReachedTracking(typeReachabilityCondition.getType());
             }
 
-            Resources.currentLayer().addResourceCondition(module, resourcePath, condition);
+            Resources.currentLayer().addResourceCondition(module, resourcePath, condition, false);
         }
 
         @Override

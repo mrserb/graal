@@ -27,6 +27,7 @@ package com.oracle.svm.core.reflect;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Modifier;
 
+import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.hub.crema.CremaSupport;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -44,6 +45,10 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 public final class CremaSerializationConstructorAccessor extends AbstractCremaConstructorAccessor {
     private final Class<?> serializationTargetClass;
 
+    private static boolean isAbstract(Class<?> serializationTargetClass) {
+        return Modifier.isAbstract(DynamicHub.fromClass(serializationTargetClass).getInterpreterType().getModifiers());
+    }
+
     public CremaSerializationConstructorAccessor(Class<?> serializationTargetClass, Constructor<?> constructorToCall) {
         /*
          * Resolve the constructor once so each deserialization does not repeat the
@@ -53,7 +58,7 @@ public final class CremaSerializationConstructorAccessor extends AbstractCremaCo
     }
 
     private CremaSerializationConstructorAccessor(Class<?> serializationTargetClass, Class<?> constructorDeclaringClass, Class<?>[] constructorParameterTypes, ResolvedJavaMethod constructorToCall) {
-        super(constructorToCall, constructorDeclaringClass, constructorParameterTypes, Modifier.isAbstract(serializationTargetClass.getModifiers()));
+        super(constructorToCall, constructorDeclaringClass, constructorParameterTypes, isAbstract(serializationTargetClass));
         this.serializationTargetClass = serializationTargetClass;
     }
 

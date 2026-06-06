@@ -38,6 +38,8 @@ import java.lang.reflect.Method;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.jar.JarEntry;
+import java.util.jar.JarOutputStream;
 
 import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.nativeimage.hosted.RuntimeReflection;
@@ -47,11 +49,15 @@ import org.junit.Test;
 @NativeImageBuildArgs({
                 "-H:+RuntimeClassLoading",
                 "--add-opens=java.base/jdk.internal.loader=ALL-UNNAMED",
+                "--enable-url-protocols=jar",
                 "--initialize-at-run-time=jdk.internal.loader.ClassLoaders",
                 "--features=com.oracle.svm.test.GetPackageRuntimeClassLoadingTest$TestFeature"
 })
 public class GetPackageRuntimeClassLoadingTest {
-    private static final String BOOT_APPEND_CLASS_NAME = "bootappend.BootAppendPackageClass";
+    private static final String EXPLODED_BOOT_APPEND_PACKAGE_NAME = "bootappend";
+    private static final String EXPLODED_BOOT_APPEND_CLASS_NAME = EXPLODED_BOOT_APPEND_PACKAGE_NAME + ".BootAppendPackageClass";
+    private static final String JAR_BOOT_APPEND_PACKAGE_NAME = "bootappendjar";
+    private static final String JAR_BOOT_APPEND_CLASS_NAME = JAR_BOOT_APPEND_PACKAGE_NAME + ".BootAppendJarPackageClass";
     private static final String BOOT_APPEND_MARKER = "loaded from boot append path";
 
     public static class TestFeature implements Feature {
@@ -77,24 +83,48 @@ public class GetPackageRuntimeClassLoadingTest {
     @SuppressWarnings("deprecation")
     @Test
     public void testGetPackageForRuntimeDefinedBootClass() throws Exception {
-        Assert.assertNull(Package.getPackage("bootappend"));
+        Assert.assertNull(Package.getPackage(EXPLODED_BOOT_APPEND_PACKAGE_NAME));
 
-        byte[] classBytes = generateBootAppendClassBytes();
+        byte[] classBytes = generateBootAppendClassBytes(EXPLODED_BOOT_APPEND_CLASS_NAME);
         Path bootAppendRoot = Files.createTempDirectory("gr36066-boot-append");
-        Path packageDir = Files.createDirectory(bootAppendRoot.resolve("bootappend"));
+        Path packageDir = Files.createDirectory(bootAppendRoot.resolve(EXPLODED_BOOT_APPEND_PACKAGE_NAME));
         Files.write(packageDir.resolve("BootAppendPackageClass.class"), classBytes);
 
         appendBootClassPath(bootAppendRoot);
-        Class<?> clazz = Class.forName(BOOT_APPEND_CLASS_NAME, true, null);
+        Assert.assertNull(Package.getPackage(EXPLODED_BOOT_APPEND_PACKAGE_NAME));
+        Class<?> clazz = Class.forName(EXPLODED_BOOT_APPEND_CLASS_NAME, true, null);
 
-        Assert.assertNotNull(clazz);
-        Assert.assertNull(clazz.getClassLoader());
-        Assert.assertEquals(BOOT_APPEND_MARKER, clazz.getMethod("marker").invoke(null));
-        Assert.assertNotNull(Package.getPackage("bootappend"));
+        assertBootAppendClassLoaded(clazz);
+        Assert.assertNotNull(Package.getPackage(EXPLODED_BOOT_APPEND_PACKAGE_NAME));
     }
 
-    private static byte[] generateBootAppendClassBytes() {
-        ClassDesc bootAppendClass = ClassDesc.of(BOOT_APPEND_CLASS_NAME);
+    /**
+     * Checks that package lookup is not dependent on explicit directory entries in boot-append JARs.
+     */
+    @SuppressWarnings("deprecation")
+    @Test
+    public void testGetPackageForRuntimeDefinedBootJarClass() throws Exception {
+        Assert.assertNull(Package.getPackage(JAR_BOOT_APPEND_PACKAGE_NAME));
+
+        byte[] classBytes = generateBootAppendClassBytes(JAR_BOOT_APPEND_CLASS_NAME);
+        Path bootAppendJar = Files.createTempFile("gr36066-boot-append", ".jar");
+        try (JarOutputStream jarOutput = new JarOutputStream(Files.newOutputStream(bootAppendJar))) {
+            /* Do not add a package directory entry; only the class entry should be present. */
+            jarOutput.putNextEntry(new JarEntry(JAR_BOOT_APPEND_CLASS_NAME.replace('.', '/') + ".class"));
+            jarOutput.write(classBytes);
+            jarOutput.closeEntry();
+        }
+
+        appendBootClassPath(bootAppendJar);
+        Assert.assertNull(Package.getPackage(JAR_BOOT_APPEND_PACKAGE_NAME));
+        Class<?> clazz = Class.forName(JAR_BOOT_APPEND_CLASS_NAME, true, null);
+
+        assertBootAppendClassLoaded(clazz);
+        Assert.assertNotNull(Package.getPackage(JAR_BOOT_APPEND_PACKAGE_NAME));
+    }
+
+    private static byte[] generateBootAppendClassBytes(String className) {
+        ClassDesc bootAppendClass = ClassDesc.of(className);
         // @formatter:off
         return ClassFile.of().build(bootAppendClass, classBuilder -> classBuilder
                         .withMethodBody(INIT_NAME, MTD_void, ACC_PUBLIC, b -> b
@@ -105,6 +135,12 @@ public class GetPackageRuntimeClassLoadingTest {
                                         .ldc(BOOT_APPEND_MARKER)
                                         .areturn()));
         // @formatter:on
+    }
+
+    private static void assertBootAppendClassLoaded(Class<?> clazz) throws ReflectiveOperationException {
+        Assert.assertNotNull(clazz);
+        Assert.assertNull(clazz.getClassLoader());
+        Assert.assertEquals(BOOT_APPEND_MARKER, clazz.getMethod("marker").invoke(null));
     }
 
     private static void appendBootClassPath(Path entry) throws ReflectiveOperationException {

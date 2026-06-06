@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
@@ -101,6 +102,12 @@ public final class Target_java_lang_ClassLoader {
 
     @Alias @RecomputeFieldValue(kind = Kind.Reset, isFinal = true)// GR-62338
     public ConcurrentHashMap<String, Object> parallelLockMap;
+
+    /**
+     * Tracks packages observed by this class loader. The JDK stores either a {@code NamedPackage}
+     * entry or a lazily materialized {@link Package} as the map value.
+     */
+    @Alias ConcurrentHashMap<String, Object> packages;
 
     @Alias @RecomputeFieldValue(kind = Kind.Custom, declClass = AssertionLockComputer.class, isFinal = true) // GR-62338
     private Object assertionLock;
@@ -447,6 +454,38 @@ final class Target_java_lang_AssertionStatusDirectives {
 
 @TargetClass(className = "java.lang.NamedPackage") //
 final class Target_java_lang_NamedPackage {
+    /**
+     * Gets the module associated with this named package entry.
+     */
+    @Alias
+    native Module module();
+}
+
+/**
+ * Reads {@code ClassLoader} package alias state from normal Java code.
+ */
+final class ClassLoaderPackageSupport {
+    private ClassLoaderPackageSupport() {
+    }
+
+    /**
+     * Finds an already observed package entry and materializes it as a {@link Package}.
+     */
+    @BasedOnJDKFile("https://github.com/openjdk/jdk/blob/jdk-25+16/src/java.base/share/classes/java/lang/ClassLoader.java#L2089-L2097")
+    static Package getDefinedPackageFromPackages(Target_java_lang_ClassLoader classLoader, String packageName) {
+        Objects.requireNonNull(packageName, "name cannot be null");
+
+        Object packageEntry = classLoader.packages.get(packageName);
+        if (packageEntry == null) {
+            return null;
+        }
+        if (packageEntry instanceof Package definedPackage) {
+            return definedPackage;
+        }
+
+        Module module = SubstrateUtil.cast(packageEntry, Target_java_lang_NamedPackage.class).module();
+        return classLoader.definePackage(packageName, module);
+    }
 }
 
 @TargetClass(className = "java.lang.ClassLoader", innerClass = "ParallelLoaders")

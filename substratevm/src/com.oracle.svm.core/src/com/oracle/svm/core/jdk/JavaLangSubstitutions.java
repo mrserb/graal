@@ -689,6 +689,13 @@ final class Target_jdk_internal_loader_BootLoader {
     }
 
     /**
+     * Looks up the source location for a package already known to the boot loader.
+     *
+     * This method returns a non-null location only after at least one boot-loaded class in
+     * {@code internalPackageName} has been loaded. For appended boot class path entries, the
+     * package source is recorded when runtime class loading reads a class from that package; this
+     * method does not scan the boot class path for packages with no loaded classes.
+     *
      * @param internalPackageName package name in internal form (e.g. "org/foo/impl")
      */
     @Substitute
@@ -701,7 +708,13 @@ final class Target_jdk_internal_loader_BootLoader {
     }
 
     /**
-     * Defines boot loader packages without reaching the JDK helper path that depends on `JAVA_HOME`.
+     * Defines a boot loader package without reaching the JDK helper path that depends on
+     * {@code JAVA_HOME}.
+     *
+     * Already observed packages are materialized from the boot loader's {@code ClassLoader#packages}
+     * alias. Otherwise, this falls back to the boot package location data exposed by
+     * {@link #getSystemPackageLocation(String)}, which returns a non-null location only after at
+     * least one boot-loaded class in {@code packageName} has been loaded.
      *
      * @param packageName package name in external form (e.g. "org.foo.impl")
      */
@@ -709,8 +722,8 @@ final class Target_jdk_internal_loader_BootLoader {
     @BasedOnJDKFile("https://github.com/openjdk/jdk/blob/jdk-25+16/src/java.base/share/classes/jdk/internal/loader/BootLoader.java#L187-L200")
     public static Package getDefinedPackage(String packageName) {
         Target_jdk_internal_loader_BuiltinClassLoader bootClassLoader = Target_jdk_internal_loader_ClassLoaders.bootLoader();
-        ClassLoader classLoader = SubstrateUtil.cast(bootClassLoader, ClassLoader.class);
-        Package definedPackage = classLoader.getDefinedPackage(packageName);
+        Target_java_lang_ClassLoader classLoader = SubstrateUtil.cast(bootClassLoader, Target_java_lang_ClassLoader.class);
+        Package definedPackage = ClassLoaderPackageSupport.getDefinedPackageFromPackages(classLoader, packageName);
         if (definedPackage == null) {
             String location = getSystemPackageLocation(packageName.replace('.', '/'));
             if (location != null) {

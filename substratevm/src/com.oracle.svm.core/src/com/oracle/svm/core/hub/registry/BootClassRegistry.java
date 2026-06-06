@@ -141,7 +141,7 @@ public final class BootClassRegistry extends AbstractRuntimeClassRegistry {
     }
 
     private static byte[] loadFromAppendedBootClassPathBytes(Symbol<Type> type) throws IOException {
-        return BootLoaderClassPathSupport.getResourceBytes(TypeSymbols.typeToName(type) + ".class");
+        return BootLoaderClassPathSupport.getClassBytes(TypeSymbols.typeToName(type).toString());
     }
 
     /**

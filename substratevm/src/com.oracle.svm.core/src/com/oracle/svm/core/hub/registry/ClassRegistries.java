@@ -50,6 +50,7 @@ import com.oracle.svm.core.hub.PredefinedClassesSupport;
 import com.oracle.svm.core.hub.RuntimeClassLoading;
 import com.oracle.svm.core.hub.RuntimeClassLoading.ClassDefinitionInfo;
 import com.oracle.svm.core.hub.crema.CremaSupport;
+import com.oracle.svm.core.imagelayer.ImageLayerBuildingSupport;
 import com.oracle.svm.core.jdk.Target_java_lang_ClassLoader;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.metadata.MetadataTracer;
@@ -137,6 +138,7 @@ public final class ClassRegistries implements ParsingContext {
 
     /**
      * Maps boot loader packages in internal form (e.g. {@code java/lang}) to their defining module.
+     * Shared layers leave this map uninitialized because boot package queries use the runtime last layer.
      */
     private final EconomicMap<String, String> bootPackageToModule;
 
@@ -156,7 +158,7 @@ public final class ClassRegistries implements ParsingContext {
             bootRegistry = new AOTClassRegistry(null);
         }
         buildTimeRegistries = new ConcurrentHashMap<>();
-        bootPackageToModule = computeBootPackageToModuleMap();
+        bootPackageToModule = ImageLayerBuildingSupport.buildingSharedLayer() ? null : computeBootPackageToModuleMap();
         knownClassNames = EconomicMap.create();
     }
 
@@ -183,13 +185,8 @@ public final class ClassRegistries implements ParsingContext {
      * Finds the boot module that defines `internalPackageName`.
      */
     static String getBootModuleForPackage(String internalPackageName) {
-        for (var singleton : layeredSingletons()) {
-            var module = singleton.bootPackageToModule.get(internalPackageName);
-            if (module != null) {
-                return module;
-            }
-        }
-        return null;
+        EconomicMap<String, String> bootPackageToModule = runtimeLastLayer().bootPackageToModule;
+        return bootPackageToModule == null ? null : bootPackageToModule.get(internalPackageName);
     }
 
     /**
@@ -207,11 +204,13 @@ public final class ClassRegistries implements ParsingContext {
      * Returns boot loader package names in internal form, matching `BootLoader.getSystemPackageNames`.
      */
     public static String[] getSystemPackageNames() {
+        EconomicMap<String, String> bootPackageToModule = runtimeLastLayer().bootPackageToModule;
+        if (bootPackageToModule == null) {
+            return new String[0];
+        }
         Set<String> systemPackageNames = new HashSet<>();
-        for (var singleton : layeredSingletons()) {
-            for (var key : singleton.bootPackageToModule.getKeys()) {
-                systemPackageNames.add(key);
-            }
+        for (var key : bootPackageToModule.getKeys()) {
+            systemPackageNames.add(key);
         }
         return systemPackageNames.toArray(String[]::new);
     }

@@ -47,6 +47,7 @@ import org.junit.Assert;
 import org.junit.Test;
 
 @NativeImageBuildArgs({
+                "-H:+UnlockExperimentalVMOptions",
                 "-H:+RuntimeClassLoading",
                 "--add-opens=java.base/jdk.internal.loader=ALL-UNNAMED",
                 "--enable-url-protocols=jar",

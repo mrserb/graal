@@ -799,7 +799,11 @@ final class Target_jdk_internal_loader_BootLoader_PackageHelper {
     private static Module findModule(String location) {
         String moduleName = location.startsWith("jrt:/") ? location.substring(5) : null;
         if (moduleName != null) {
-            return Modules.findLoadedModule(moduleName).orElseThrow(() -> new InternalError(moduleName + " not loaded"));
+            Module module = Modules.findLoadedModule(moduleName).orElse(null);
+            if (module == null) {
+                throw new InternalError(moduleName + " not loaded");
+            }
+            return module;
         }
         return null;
     }

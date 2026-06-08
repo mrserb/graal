@@ -27,6 +27,7 @@ package com.oracle.svm.configure.test.config;
 import static org.junit.Assume.assumeTrue;
 
 import java.io.InputStream;
+import java.net.URI;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.net.URLConnection;
@@ -97,7 +98,7 @@ public class ClassPathJarResourceAgentTest {
         Path jarFile = Files.createTempFile("native-image-agent-explicit-jar-url", ".jar");
         try {
             writeProbeJar(jarFile);
-            URL resource = new URL("jar:" + jarFile.toUri() + "!/" + RESOURCE_NAME);
+            URL resource = URI.create("jar:" + jarFile.toUri() + "!/" + RESOURCE_NAME).toURL();
             Assert.assertEquals("jar", resource.getProtocol());
             URLConnection connection = resource.openConnection();
             connection.setUseCaches(false);

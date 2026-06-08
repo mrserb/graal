@@ -50,10 +50,8 @@ import com.oracle.svm.configure.test.AddExports;
                 "jdk.graal.compiler/jdk.graal.compiler.util",
                 "jdk.graal.compiler/jdk.graal.compiler.util.json"})
 public class ClassPathJarResourceAgentVerifierTest {
-    private static final String VERIFIER_ENABLED_PROPERTY =
-                    ClassPathJarResourceAgentVerifierTest.class.getName() + ".verifier.enabled";
-    private static final String CONFIG_PATH_PROPERTY =
-                    ClassPathJarResourceAgentVerifierTest.class.getName() + ".configpath";
+    private static final String VERIFIER_ENABLED_PROPERTY = ClassPathJarResourceAgentVerifierTest.class.getName() + ".verifier.enabled";
+    private static final String CONFIG_PATH_PROPERTY = ClassPathJarResourceAgentVerifierTest.class.getName() + ".configpath";
     private static final String JAR_HANDLER = "sun.net.www.protocol.jar.Handler";
 
     @Test

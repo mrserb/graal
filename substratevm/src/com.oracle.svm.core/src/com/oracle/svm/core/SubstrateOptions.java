@@ -701,10 +701,8 @@ public class SubstrateOptions {
                         }
                       ]
                     }""";
-    @APIOption(name = "enable-http", fixedValue = "http", customHelp = "enable http support in the generated image",
-                    deprecated = DEPRECATION_MESSAGE_ENABLE_HTTP)//
-    @APIOption(name = "enable-https", fixedValue = "https", customHelp = "enable https support in the generated image",
-                    deprecated = DEPRECATION_MESSAGE_ENABLE_HTTPS)//
+    @APIOption(name = "enable-http", fixedValue = "http", customHelp = "enable http support in the generated image", deprecated = DEPRECATION_MESSAGE_ENABLE_HTTP)//
+    @APIOption(name = "enable-https", fixedValue = "https", customHelp = "enable https support in the generated image", deprecated = DEPRECATION_MESSAGE_ENABLE_HTTPS)//
     @APIOption(name = "enable-url-protocols", deprecated = "Use reachability metadata instead.")//
     @Option(help = "List of comma separated URL protocols to enable.")//
     public static final HostedOptionKey<AccumulatingLocatableMultiOptionValue.Strings> EnableURLProtocols = new HostedOptionKey<>(

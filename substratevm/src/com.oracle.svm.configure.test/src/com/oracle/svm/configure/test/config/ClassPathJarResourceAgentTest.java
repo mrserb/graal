@@ -53,8 +53,7 @@ import org.junit.Test;
  * the agent emits the unwanted handler metadata in the first place.
  */
 public class ClassPathJarResourceAgentTest {
-    private static final String GENERATOR_ENABLED_PROPERTY =
-                    ClassPathJarResourceAgentTest.class.getName() + ".generator.enabled";
+    private static final String GENERATOR_ENABLED_PROPERTY = ClassPathJarResourceAgentTest.class.getName() + ".generator.enabled";
     private static final String RESOURCE_NAME = "agent-url-protocol-resource.txt";
     private static final String RESOURCE_CONTENTS = "agent resource lookup";
 
